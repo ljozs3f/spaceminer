@@ -1,0 +1,3 @@
+# The localdev_download container stores the *.localdev.hu certificate here.
+*
+!.gitignore

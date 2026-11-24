@@ -1,0 +1,26 @@
+packages:
+  - packages/*
+
+# pnpm 12 ignores pnpm settings in .npmrc, so save-exact is repeated here.
+saveExact: true
+
+# pnpm 12 only installs releases older than its minimum release age by default. typescript-eslint 8.74.0
+# (the newest stable) was published on 2026-11-23, so exactly that version is excluded from the check.
+# Remove this list once the release is old enough.
+minimumReleaseAgeExclude:
+  - '@typescript-eslint/eslint-plugin@8.74.0'
+  - '@typescript-eslint/parser@8.74.0'
+  - '@typescript-eslint/project-service@8.74.0'
+  - '@typescript-eslint/scope-manager@8.74.0'
+  - '@typescript-eslint/tsconfig-utils@8.74.0'
+  - '@typescript-eslint/type-utils@8.74.0'
+  - '@typescript-eslint/types@8.74.0'
+  - '@typescript-eslint/typescript-estree@8.74.0'
+  - '@typescript-eslint/utils@8.74.0'
+  - '@typescript-eslint/visitor-keys@8.74.0'
+  - typescript-eslint@8.74.0
+
+# Phaser ships AI agent skills, which pnpm 12 would offer to install. The game does not need them.
+permissions:
+  phaser:
+    skills: false

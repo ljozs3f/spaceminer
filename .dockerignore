@@ -1,0 +1,2 @@
+# The image only installs tooling; the source is bind-mounted at runtime, so no build context is needed.
+*

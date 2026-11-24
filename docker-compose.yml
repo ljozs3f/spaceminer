@@ -1,0 +1,59 @@
+name: spaceminer
+
+services:
+  # Vite dev server with hot reload: http://localhost:5173
+  client:
+    build:
+      context: .
+      args:
+        UID: ${HOST_UID:-1000}
+        GID: ${HOST_GID:-1000}
+    command: sh -c "pnpm install --frozen-lockfile && exec pnpm dev"
+    environment:
+      LOCAL_DOMAIN: ${LOCAL_DOMAIN:-spaceminer.localdev.hu}
+      VITE_USE_POLLING: ${VITE_USE_POLLING:-false}
+    ports:
+      - 127.0.0.1:${CLIENT_PORT:-5173}:5173
+    volumes:
+      - .:/app
+      # dependencies stay in volumes, so the host and the container never share node_modules
+      - node-modules:/app/node_modules
+      - sim-node-modules:/app/packages/sim/node_modules
+      - client-node-modules:/app/packages/client/node_modules
+      - pnpm-store:/home/node/.pnpm-store
+
+  # Downloads the *.localdev.hu certificate into docker/localdev (the names resolve to 127.0.0.1).
+  localdev_download:
+    image: geplakatos/localdev:client-download-v6
+    restart: unless-stopped
+    volumes:
+      - ./docker/localdev:/var/localdev/data
+    healthcheck:
+      test: ['CMD-SHELL', 'test -s /var/localdev/data/key.crt']
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  # HTTPS reverse proxy in front of the dev server: https://spaceminer.localdev.hu
+  nginx:
+    image: nginx:1.30.7-trixie
+    restart: unless-stopped
+    environment:
+      LOCAL_DOMAIN: ${LOCAL_DOMAIN:-spaceminer.localdev.hu}
+    ports:
+      - 127.0.0.1:${HTTPS_PORT:-443}:443
+    volumes:
+      - ./docker/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./docker/nginx/15-localdev-fullchain.sh:/docker-entrypoint.d/15-localdev-fullchain.sh:ro
+      - ./docker/localdev:/etc/nginx/localdev:ro
+    depends_on:
+      client:
+        condition: service_started
+      localdev_download:
+        condition: service_healthy
+
+volumes:
+  node-modules:
+  sim-node-modules:
+  client-node-modules:
+  pnpm-store:
