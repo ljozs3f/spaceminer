@@ -39,6 +39,7 @@ export function createWorld(
     buildings: [],
     enemies: [],
     projectiles: [],
+    drones: [],
   };
 
   playerIds.forEach((playerId, index) => {

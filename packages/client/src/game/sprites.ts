@@ -1,8 +1,9 @@
 import type { AsteroidSize, BuildingLevel, BuildingType, EnemyType, TurretType } from '@space-miner/sim';
+import { generatedSprites } from './generatedSprites';
 
 /**
- * Sprites cut from the generated sheets by `make sprites` (scripts/sprites.ts). Every file is optional:
- * without one, the game draws a shape instead.
+ * Sprites cut from the generated sheets by `make sprites` (scripts/sprites.ts), and the ones painted in code
+ * (generatedSprites.ts). Every file is optional: without one, the game draws a shape instead.
  */
 const FILES = import.meta.glob<string>('../assets/sprites/*.png', {
   eager: true,
@@ -10,10 +11,15 @@ const FILES = import.meta.glob<string>('../assets/sprites/*.png', {
   import: 'default',
 });
 
-/** Sprite name (file name without .png) to URL. */
-export const SPRITE_URLS: ReadonlyMap<string, string> = new Map(
-  Object.entries(FILES).map(([path, url]) => [path.slice(path.lastIndexOf('/') + 1, -'.png'.length), url]),
-);
+/** Sprite name (file name without .png) to URL; files replace the sprites painted in code. */
+export const SPRITE_URLS: ReadonlyMap<string, string> = new Map([
+  ...generatedSprites(),
+  ...Object.entries(FILES).map(
+    ([path, url]) => [path.slice(path.lastIndexOf('/') + 1, -'.png'.length), url] as const,
+  ),
+]);
+
+export const DRONE_SPRITE = 'drone';
 
 export const BACKGROUND_SPRITE = 'background';
 

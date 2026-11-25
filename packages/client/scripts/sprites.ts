@@ -4,9 +4,10 @@
  *
  * Objects are found by their outlines (connected opaque pixels) and assigned to grid cells by their centers,
  * so the generated grid does not have to be exact, and an object made of several pieces (a missile and its
- * flame) stays together. Each sprite is trimmed, its edges cleaned (faint haze removed, edge colors taken
- * from the inside so no colored fringe shows on the map), centered on a square and scaled down with area
- * averaging.
+ * flame) stays together. A sheet whose objects stand on a nearly opaque glow instead of a transparent
+ * background gets that glow removed first (see SheetSpec.backdrop). Each sprite is trimmed, its edges
+ * cleaned (faint haze removed, edge colors taken from the inside so no colored fringe shows on the map),
+ * centered on a square and scaled down with area averaging.
  *
  * Run: make sprites
  */
@@ -19,6 +20,12 @@ interface SheetSpec {
   readonly rows: number;
   /** Sprite name and output size in pixels per cell, left to right, top to bottom. */
   readonly cells: readonly (readonly [name: string, size: number])[];
+  /**
+   * For a sheet with a glow behind every object instead of a transparent background: the glow gets almost
+   * opaque near the object, the object itself is a little more opaque still. Pixels at least `opaqueFrom`
+   * opaque are the objects; see removeBackdrop.
+   */
+  readonly backdrop?: { readonly opaqueFrom: number };
 }
 
 /** Sprites are made at about 4 pixels per screen pixel of a 32 px cell, so they stay sharp when scaled up. */
@@ -56,6 +63,16 @@ const SHEETS: readonly SheetSpec[] = [
         (type) => [`building-${type}-${String(level)}`, 128] as const,
       ),
     ),
+    // this sheet came with a grey glow behind each building (alpha up to about 249; the buildings: 250+)
+    backdrop: { opaqueFrom: 250 },
+  },
+  {
+    // optional: the Mender Hive at levels 1 to 3, in place of the one painted in code (generatedSprites.ts);
+    // add `backdrop` if the sheet comes with a glow behind the buildings like buildings.png
+    file: 'hive.png',
+    columns: 3,
+    rows: 1,
+    cells: [1, 2, 3].map((level) => [`building-repair-${String(level)}`, 128] as const),
   },
 ];
 
@@ -101,7 +118,8 @@ for (const sheet of SHEETS) {
     console.log(`${sheet.file}: not found, skipped`);
     continue;
   }
-  cutSheet(readPng(path), sheet);
+  const image = readPng(path);
+  cutSheet(sheet.backdrop ? removeBackdrop(image, sheet.backdrop.opaqueFrom) : image, sheet);
 }
 if (existsSync(new URL(BACKGROUND, artDir))) {
   copyFileSync(new URL(BACKGROUND, artDir), new URL(BACKGROUND, outDir));
@@ -127,6 +145,16 @@ function cutSheet(image: Image, sheet: SheetSpec): void {
     writeFileSync(new URL(`${name}.png`, outDir), writePng(sprite));
     console.log(`${sheet.file}: ${name} (${String(own.length)} piece(s)) -> ${String(size)} px`);
   });
+}
+
+/**
+ * Makes the objects of a sheet with a glow behind them fully opaque and the glow transparent. The glow is a
+ * little less opaque than the objects, even where an object encloses it (between gun barrels).
+ */
+function removeBackdrop(image: Image, opaqueFrom: number): Image {
+  const data = new Uint8Array(image.data);
+  for (let at = 3; at < data.length; at += 4) data[at] = (data[at] ?? 0) >= opaqueFrom ? 255 : 0;
+  return { width: image.width, height: image.height, data };
 }
 
 /** Connected groups of solid pixels (8-neighbourhood), without specks. */

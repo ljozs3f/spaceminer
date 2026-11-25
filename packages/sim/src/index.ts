@@ -11,12 +11,13 @@ export type {
   BuildingStats,
   BuildingStatsByType,
   MineStats,
+  RepairStats,
   SolarStats,
   TurretStats,
 } from './config/buildings';
 export type { AsteroidSizeConfig } from './config/asteroids';
 export { ASTEROID_CONFIG } from './config/asteroids';
-export { BUILDING_CONFIG, BUILDING_SALE } from './config/buildings';
+export { BUILDING_CONFIG, BUILDING_SALE, DRONE_CONFIG } from './config/buildings';
 export type { EnemyStats } from './config/enemies';
 export { ENEMY_CONFIG } from './config/enemies';
 export type {
@@ -50,4 +51,4 @@ export { createGame, step } from './simulation';
 export type * from './types';
 export type { WaveGroup } from './systems/waves';
 export { getWaveComposition } from './systems/waves';
-export { ASTEROID_SIZES, BUILDING_TYPES, ENEMY_TYPES } from './types';
+export { ASTEROID_SIZES, BUILDING_TYPES, ENEMY_TYPES, MAP_EDGES } from './types';

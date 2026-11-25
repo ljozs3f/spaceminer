@@ -59,6 +59,18 @@ describe('waves', () => {
     expect(state.enemies.filter((enemy) => enemy.type === 'dreadnought')).toHaveLength(1);
   });
 
+  it('spawn only on the edges the level names', () => {
+    const state = createTestGame({ waves: { ...WAVES, spawnEdges: ['right'] } });
+    const [base] = state.buildings;
+    if (!base) throw new Error('base missing');
+    base.hp = Number.MAX_SAFE_INTEGER;
+    runTicks(state, WAVES.firstWaveSeconds * TICK_RATE + 1);
+    expect(state.enemies.length).toBeGreaterThan(0);
+    for (const enemy of state.enemies) {
+      expect(state.level.width - enemy.x).toBeLessThanOrEqual(perTick(ENEMY_CONFIG.raider.speed) + 1e-9);
+    }
+  });
+
   describe.each(LEVELS)('level $name', (level) => {
     it('gets stronger with every wave up to the last scaling wave', () => {
       for (let wave = 1; wave <= level.waves.lastScalingWave; wave++) {

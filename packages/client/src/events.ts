@@ -1,4 +1,5 @@
 import type { BuildingType, Command, CommandResult, EntityId, GameEvent } from '@space-miner/sim';
+import type { MapView } from './phaser/CameraController';
 
 /** Everything Vue and Phaser tell each other. Neither changes the game state: they send commands. */
 export interface GameEvents {
@@ -19,6 +20,10 @@ export interface GameEvents {
   'game:over': 'won' | 'lost';
   /** Something the player should notice (see AlertMonitor). */
   alert: Alert;
+  /** The part of the map in view changed (zoom or pan). */
+  'view:change': MapView;
+  /** The zoom buttons. */
+  'view:zoom': 'in' | 'out' | 'reset';
 }
 
 export type AlertKind = 'info' | 'warning' | 'danger' | 'error';

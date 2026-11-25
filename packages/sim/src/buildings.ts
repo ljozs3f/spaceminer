@@ -65,6 +65,7 @@ export function addBuilding(
     y,
     hp: getBuildingStats(type, 1).maxHp,
     cooldown: 0,
+    salvoLeft: 0,
     targetId: null,
   };
   state.buildings.push(building);

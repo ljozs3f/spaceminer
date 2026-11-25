@@ -1,4 +1,11 @@
-import type { BuildingType, Command, GameEvent } from '@space-miner/sim';
+import {
+  TICK_RATE,
+  ticksUntilNextWave,
+  type BuildingType,
+  type Command,
+  type EntityId,
+  type GameEvent,
+} from '@space-miner/sim';
 import type { EventBus, GameEvents } from '../events';
 import type { GameSession } from '../game/GameSession';
 import type { AudioEngine } from './AudioEngine';
@@ -8,12 +15,17 @@ import type { SoundEffect } from './effects';
 const PAN_WIDTH = 0.7;
 /** Pirates on the map at which the battle music is at full strength. */
 const FULL_INTENSITY_ENEMIES = 4;
+/** The last seconds before a wave ping, one ping a second. */
+const COUNTDOWN_SECONDS = 3;
+/** While the wave alarm sounds the music is pulled down to this level, for this many seconds. */
+const ALARM_DUCK = { level: 0.3, seconds: 2.2 } as const;
 
 const PLACE_SOUNDS: Readonly<Record<BuildingType, SoundEffect>> = {
   mine: 'placeMine',
   solar: 'placeSolar',
   laser: 'placeLaser',
   missile: 'placeMissile',
+  repair: 'placeRepair',
 };
 
 function commandSound(command: Command): SoundEffect {
@@ -30,6 +42,11 @@ function commandSound(command: Command): SoundEffect {
 /** Turns what happens in one game into sound effects and music intensity. */
 export class GameAudio {
   private readonly unsubscribers: (() => void)[];
+  /** What each repair drone was going to in the last tick, to hear it take off. */
+  private readonly droneTargets = new Map<EntityId, EntityId | null>();
+  private weldTurn = 0;
+  /** The countdown second pinged last. */
+  private lastCountdown = 0;
 
   constructor(
     private readonly audio: AudioEngine,
@@ -52,6 +69,8 @@ export class GameAudio {
       }),
       bus.on('tick', () => {
         audio.setIntensity(Math.min(1, session.state.enemies.length / FULL_INTENSITY_ENEMIES));
+        this.onDrones();
+        this.onCountdown();
       }),
       bus.on('game:over', (status) => {
         audio.setIntensity(0);
@@ -71,7 +90,7 @@ export class GameAudio {
         this.audio.play(event.turret === 'laser' ? 'laser' : 'missileLaunch', this.pan(event.x));
         break;
       case 'enemyFired':
-        this.audio.play('pirateShot', this.pan(event.x));
+        this.audio.play(event.enemy === 'dreadnought' ? 'pirateCannon' : 'pirateShot', this.pan(event.x));
         break;
       case 'projectileHit':
         if (event.turret === 'missile') this.audio.play('missileImpact', this.pan(event.x));
@@ -89,10 +108,39 @@ export class GameAudio {
         this.audio.play('buildingDestroyed', this.pan(event.x));
         break;
       case 'waveStarted':
-        this.audio.play('waveWarning');
+        this.audio.play('waveAlarm');
+        this.audio.duckMusic(ALARM_DUCK.level, ALARM_DUCK.seconds);
         break;
       case 'asteroidDepleted':
         break;
+    }
+  }
+
+  /** A ping for each of the last seconds before a wave. */
+  private onCountdown(): void {
+    const seconds = Math.ceil(ticksUntilNextWave(this.session.state) / TICK_RATE);
+    if (seconds !== this.lastCountdown && seconds >= 1 && seconds <= COUNTDOWN_SECONDS) {
+      this.audio.play('countdown');
+    }
+    this.lastCountdown = seconds;
+  }
+
+  /** Drones whir when they take off; while any of them repairs, welding crackles (limited per effect). */
+  private onDrones(): void {
+    const { drones } = this.session.state;
+    const repairing = drones.filter((drone) => drone.repairing);
+    if (repairing.length > 0) {
+      const drone = repairing[this.weldTurn++ % repairing.length];
+      if (drone) this.audio.play('repairWeld', this.pan(drone.x));
+    }
+    for (const drone of drones) {
+      const before = this.droneTargets.get(drone.id);
+      if (before === null && drone.targetId !== null) this.audio.play('droneLaunch', this.pan(drone.x));
+      this.droneTargets.set(drone.id, drone.targetId);
+    }
+    if (this.droneTargets.size > drones.length) {
+      const alive = new Set(drones.map((drone) => drone.id));
+      for (const id of this.droneTargets.keys()) if (!alive.has(id)) this.droneTargets.delete(id);
     }
   }
 

@@ -1,8 +1,8 @@
 import type { Song } from '../song';
-import { NEBULA_RITES } from './nebulaRites';
+import { SENTINEL_EXPANSE } from './sentinelExpanse';
 
 /**
- * The soundtrack that plays. The previous one, "Starlight Prospector" (./starlightProspector.ts), is kept:
- * to play it again, put STARLIGHT_PROSPECTOR here.
+ * The built-in soundtrack: it plays where a music file (src/assets/music) is missing. menu: the intro, the
+ * loading screens and the menu; game: in a sector.
  */
-export const SOUNDTRACK: Readonly<Record<'menu' | 'game', Song>> = NEBULA_RITES;
+export const BUILT_IN_SOUNDTRACK: Readonly<Record<'menu' | 'game', Song>> = SENTINEL_EXPANSE;

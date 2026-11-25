@@ -2,7 +2,7 @@ import { ENEMY_CONFIG } from '../config/enemies';
 import type { WaveConfig } from '../config/levels';
 import type { GameEvent } from '../events';
 import { nextRandom, randomInt } from '../rng';
-import type { EnemyType, GameState } from '../types';
+import { MAP_EDGES, type EnemyType, type GameState } from '../types';
 import { secondsToTicks } from '../units';
 
 export interface WaveGroup {
@@ -39,18 +39,20 @@ export function updateWaves(state: GameState, events: GameEvent[]): void {
   state.wave.nextWaveTick += secondsToTicks(state.level.waves.intervalSeconds);
 }
 
+/** A random point on one of the edges the level's pirates come from (all four when it names none). */
 function randomEdgePoint(state: GameState): { x: number; y: number } {
   const { width, height } = state.level;
-  const side = randomInt(state, 0, 3);
+  const edges = state.level.waves.spawnEdges ?? MAP_EDGES;
+  const edge = edges[randomInt(state, 0, edges.length - 1)] ?? 'top';
   const along = nextRandom(state);
-  switch (side) {
-    case 0:
+  switch (edge) {
+    case 'top':
       return { x: along * width, y: 0 };
-    case 1:
+    case 'right':
       return { x: width, y: along * height };
-    case 2:
+    case 'bottom':
       return { x: along * width, y: height };
-    default:
+    case 'left':
       return { x: 0, y: along * height };
   }
 }
