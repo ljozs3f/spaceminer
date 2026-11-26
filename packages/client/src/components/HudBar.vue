@@ -3,11 +3,17 @@ import { TICK_RATE } from '@space-miner/sim';
 import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue';
 import { cssColor, ENEMIES } from '../game/presentation';
 import { shipSprite } from '../game/sprites';
+import { attackTip, buttonTip, energyTip, minedTip, oreTip, waveTip } from '../game/tips';
+import { vTip } from '../game/tooltip';
 import type { HudView } from '../game/views';
 import SpriteIcon from './SpriteIcon.vue';
 import UiIcon from './UiIcon.vue';
 
-const props = defineProps<{ hud: HudView; levelName: string }>();
+/** piratesFrom: where the level's pirates come from, in words. */
+const props = defineProps<{ hud: HudView; levelName: string; piratesFrom: string }>();
+
+const BACK_TIP = buttonTip('Back to the menu', undefined, 'It asks first: the sector starts over.');
+const PAUSE_TIP = buttonTip('Pause', 'Esc or P');
 defineEmits<{ exit: []; pause: [] }>();
 
 /** Seconds before a wave when its timer turns red. */
@@ -94,21 +100,15 @@ onBeforeUnmount(() => {
   <header class="hud">
     <div class="hud-title">
       <button
+        v-tip="BACK_TIP"
         type="button"
         class="hud-back"
-        title="Back to the menu"
         aria-label="Back to the menu"
         @click="$emit('exit')"
       >
         <UiIcon name="back" />
       </button>
-      <button
-        type="button"
-        class="hud-back"
-        title="Pause (Esc or P)"
-        aria-label="Pause"
-        @click="$emit('pause')"
-      >
+      <button v-tip="PAUSE_TIP" type="button" class="hud-back" aria-label="Pause" @click="$emit('pause')">
         <UiIcon name="pause" />
       </button>
       <span class="hud-level">
@@ -117,15 +117,13 @@ onBeforeUnmount(() => {
       </span>
     </div>
 
-    <div class="hud-chip ore" :class="ticker">
+    <div v-tip="oreTip(hud)" class="hud-chip ore" :class="ticker">
       <span class="chip-icon"><UiIcon name="ore" /></span>
       <span class="chip-body">
         <span class="chip-label">Ore</span>
         <span class="chip-value">{{ shownOre }}</span>
       </span>
-      <span class="chip-rate" :class="{ idle: hud.oreRate === 0 }" title="Ore per second from your mines">
-        +{{ number(hud.oreRate) }}/s
-      </span>
+      <span class="chip-rate" :class="{ idle: hud.oreRate === 0 }"> +{{ number(hud.oreRate) }}/s </span>
       <span class="floats" aria-hidden="true">
         <span v-for="float in floats" :key="float.id" class="float" :class="{ gain: float.gain }">
           {{ float.text }}
@@ -133,11 +131,7 @@ onBeforeUnmount(() => {
       </span>
     </div>
 
-    <div
-      class="hud-chip energy"
-      :class="{ short: shortOnEnergy }"
-      :title="`Your buildings use ${number(hud.energyConsumed)} of the ${number(hud.energyProduced)} energy your solar panels make`"
-    >
+    <div v-tip="energyTip(hud)" class="hud-chip energy" :class="{ short: shortOnEnergy }">
       <span class="chip-icon"><UiIcon name="energy" /></span>
       <span class="chip-body">
         <span class="chip-label">
@@ -151,7 +145,7 @@ onBeforeUnmount(() => {
       </span>
     </div>
 
-    <div class="hud-chip mined" :class="{ done: goalReached }">
+    <div v-tip="minedTip(hud)" class="hud-chip mined" :class="{ done: goalReached }">
       <span class="chip-icon"><UiIcon name="target" /></span>
       <span class="chip-body wide">
         <span class="chip-label">
@@ -165,7 +159,7 @@ onBeforeUnmount(() => {
       </span>
     </div>
 
-    <div class="hud-chip wave" :class="{ soon: waveSoon }">
+    <div v-tip="waveTip(hud, piratesFrom)" class="hud-chip wave" :class="{ soon: waveSoon }">
       <span class="chip-icon"><UiIcon name="wave" /></span>
       <span class="chip-body">
         <span class="chip-label">Wave {{ hud.wavesSpawned + 1 }} in</span>
@@ -173,12 +167,7 @@ onBeforeUnmount(() => {
         <span class="chip-meter"><span class="fill" :style="{ width: `${hud.waveProgress * 100}%` }" /></span>
       </span>
       <span class="wave-ships">
-        <span
-          v-for="group in hud.nextWave"
-          :key="group.type"
-          class="wave-ship"
-          :title="`${group.count} × ${ENEMIES[group.type].name}, ${Math.round(group.maxHp)} hit points each`"
-        >
+        <span v-for="group in hud.nextWave" :key="group.type" class="wave-ship">
           <SpriteIcon :sprite="shipSprite(group.type)" :color="cssColor(ENEMIES[group.type].color)" />
           <span>{{ group.count }}</span>
         </span>
@@ -186,7 +175,7 @@ onBeforeUnmount(() => {
     </div>
 
     <Transition name="attack">
-      <div v-if="hud.enemies > 0" class="hud-attack" role="status">
+      <div v-if="hud.enemies > 0" v-tip="attackTip(hud)" class="hud-attack" role="status">
         <span class="attack-dot" />
         {{ hud.enemies }} {{ hud.enemies === 1 ? 'pirate' : 'pirates' }} attacking
       </div>

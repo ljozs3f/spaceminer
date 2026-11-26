@@ -3,6 +3,8 @@ import { BUILDING_TYPES, getBuildingEnergy, getBuildingStats, type BuildingType 
 import { computed } from 'vue';
 import { BUILDINGS, cssColor } from '../game/presentation';
 import { buildingSprite } from '../game/sprites';
+import { buildCardTip } from '../game/tips';
+import { vTip } from '../game/tooltip';
 import SpriteIcon from './SpriteIcon.vue';
 import UiIcon from './UiIcon.vue';
 
@@ -37,6 +39,7 @@ function toggle(type: BuildingType): void {
       <button
         v-for="item in items"
         :key="item.type"
+        v-tip="buildCardTip(item.type, item.key, ore)"
         type="button"
         class="build-card"
         :class="{ active: placing === item.type, unaffordable: ore < item.cost }"
@@ -61,7 +64,6 @@ function toggle(type: BuildingType): void {
         </span>
       </button>
     </div>
-    <slot />
     <p class="build-hint" :class="{ placing: placingName !== null }">
       <template v-if="placingName">
         <span>

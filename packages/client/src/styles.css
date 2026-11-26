@@ -973,6 +973,10 @@ kbd {
 }
 
 .field {
+  --ultra-orb-size: 5.8rem;
+  /* the orb's label is wider than the orb: room for it at the edge */
+  --ultra-orb-right: 1.7rem;
+
   position: relative;
   min-height: 0;
 }
@@ -982,12 +986,12 @@ kbd {
   inset: 0;
 }
 
-/* Zoom buttons, bottom right of the map */
+/* Zoom buttons, at the right of the map above the Ultra Instinct orb */
 
 .zoom-controls {
   position: absolute;
-  right: 0.8rem;
-  bottom: 0.8rem;
+  right: calc(var(--ultra-orb-right) + (var(--ultra-orb-size) - 2.3rem) / 2);
+  bottom: calc(1.9rem + var(--ultra-orb-size) + 1.6rem);
   z-index: 4;
   display: grid;
   justify-items: end;
@@ -2286,125 +2290,354 @@ kbd {
   }
 }
 
-/* Ultra Instinct: the button of the build bar */
+/*
+ * Ultra Instinct: the orb in the bottom right corner of the map. A ring around it fills up while it
+ * recharges and drains while it is on; ready, it swirls, breathes and gives off sparks.
+ */
 
-.ultra-button {
+.ultra-orb {
   --ultra: #bfe3ff;
   --fraction: 1;
+  --size: var(--ultra-orb-size);
 
-  position: relative;
+  position: absolute;
+  right: var(--ultra-orb-right);
+  /* room for the label under it */
+  bottom: 1.9rem;
+  z-index: 4;
   display: grid;
-  grid-template-columns: auto auto;
-  align-items: center;
-  gap: 0.65rem;
-  flex: none;
-  /* right after the building cards, the hint stays at the far end */
-  margin-right: auto;
-  padding: 0.45rem 0.9rem 0.45rem 0.55rem;
-  text-align: left;
-  background: linear-gradient(160deg, rgb(150 200 255 / 10%), rgb(255 255 255 / 2%));
-  border: 1px solid rgb(191 227 255 / 22%);
-  border-radius: 12px;
-  overflow: hidden;
-  transition:
-    transform 0.15s,
-    border-color 0.15s,
-    box-shadow 0.15s;
+  place-items: center;
+  width: var(--size);
+  height: var(--size);
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1.5);
 }
 
-.ultra-button.ready {
-  border-color: rgb(191 227 255 / 55%);
-  animation: ultra-ready 2.4s ease-in-out infinite;
-}
-
-.ultra-button.ready:hover {
-  transform: translateY(-2px);
-  border-color: #fff;
-}
-
-.ultra-button[aria-disabled='true'] {
+.ultra-orb[aria-disabled='true'] {
   cursor: default;
 }
 
-.ultra-button:not(.ready, .active) .ultra-text {
-  opacity: 0.6;
+.ultra-orb.ready:hover {
+  transform: scale(1.08);
 }
 
-.ultra-button.active {
-  border-color: #fff;
-  background: linear-gradient(160deg, rgb(180 220 255 / 30%), rgb(120 160 255 / 8%));
-  box-shadow:
-    0 0 0 1px rgb(220 240 255 / 80%),
-    0 0 26px rgb(150 210 255 / 65%);
+.ultra-orb.ready:active {
+  transform: scale(0.94);
 }
 
-@keyframes ultra-ready {
+.ultra-orb:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 5px;
+}
+
+/* the light around it: breathing while ready, blazing while on */
+.ultra-halo {
+  position: absolute;
+  inset: -38%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(190 225 255 / 60%) 0%, rgb(120 165 255 / 24%) 38%, transparent 68%);
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+}
+
+.ultra-orb.ready .ultra-halo {
+  opacity: 0.85;
+  animation: ultra-breathe 2.2s ease-in-out infinite;
+}
+
+.ultra-orb.ready:hover .ultra-halo {
+  opacity: 1;
+}
+
+.ultra-orb.active .ultra-halo {
+  opacity: 1;
+  animation: ultra-blaze 0.3s ease-in-out infinite alternate;
+}
+
+@keyframes ultra-breathe {
   50% {
-    box-shadow: 0 0 18px rgb(150 210 255 / 45%);
+    transform: scale(1.14);
   }
 }
 
-/* an orb in a ring: the ring drains while on and fills up while it recharges */
-.ultra-emblem {
+@keyframes ultra-blaze {
+  to {
+    transform: scale(1.22);
+    filter: brightness(1.35);
+  }
+}
+
+.ultra-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: rotate(-90deg);
+}
+
+.ultra-ring circle {
+  fill: none;
+}
+
+/* the track the ring fills up in */
+.ultra-ring .track {
+  stroke: rgb(120 150 220 / 22%);
+  stroke-width: 7;
+}
+
+.ultra-ring .progress {
+  stroke: var(--ultra);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: var(--fraction) 1;
+  filter: drop-shadow(0 0 3px rgb(170 215 255 / 95%));
+  transition: stroke-dasharray 0.25s linear;
+}
+
+.ultra-orb.charging .ultra-ring .progress {
+  stroke: #8fa9d6;
+  filter: none;
+}
+
+.ultra-orb.active .ultra-ring .progress {
+  stroke: #fff;
+}
+
+.ultra-core {
   position: relative;
   display: grid;
   place-items: center;
-  width: 2.9rem;
-  height: 2.9rem;
-  border-radius: 50%;
-  background: conic-gradient(var(--ultra) calc(var(--fraction) * 360deg), rgb(255 255 255 / 8%) 0);
-}
-
-.ultra-emblem span {
-  width: 2.35rem;
-  height: 2.35rem;
+  width: 80%;
+  height: 80%;
+  overflow: hidden;
   border-radius: 50%;
   background: radial-gradient(
-    circle at 50% 38%,
+    circle at 50% 34%,
     #ffffff 0%,
-    #d6ecff 18%,
-    #7fb4ff 48%,
-    #2a3f86 78%,
-    #101a3a 100%
+    #d6ecff 16%,
+    #7fb4ff 45%,
+    #2a3f86 76%,
+    #0c1430 100%
   );
-  box-shadow: inset 0 0 8px rgb(0 0 0 / 50%);
+  box-shadow:
+    inset 0 0 14px rgb(0 0 0 / 55%),
+    0 0 0 2px rgb(220 240 255 / 30%);
 }
 
-.ultra-button.ready .ultra-emblem span,
-.ultra-button.active .ultra-emblem span {
-  animation: ultra-orb 1.2s ease-in-out infinite;
+.ultra-orb.ready .ultra-core {
+  animation: ultra-flare 0.9s ease-out;
 }
 
-.ultra-button:not(.ready, .active) .ultra-emblem span {
-  filter: grayscale(0.8) brightness(0.65);
+.ultra-orb.charging .ultra-core {
+  background: radial-gradient(circle at 50% 34%, #3c4d74 0%, #1a2446 55%, #0a0f22 100%);
+  box-shadow:
+    inset 0 0 14px rgb(0 0 0 / 65%),
+    0 0 0 2px rgb(140 170 255 / 14%);
 }
 
-@keyframes ultra-orb {
-  50% {
-    box-shadow:
-      inset 0 0 8px rgb(0 0 0 / 40%),
-      0 0 14px rgb(191 227 255 / 90%);
+.ultra-orb.active .ultra-core {
+  background: radial-gradient(circle at 50% 42%, #ffffff 0%, #eef8ff 32%, #a6d4ff 62%, #4a68d8 100%);
+  box-shadow:
+    inset 0 0 10px rgb(60 100 220 / 60%),
+    0 0 18px 4px rgb(200 235 255 / 85%);
+}
+
+@keyframes ultra-flare {
+  from {
+    filter: brightness(2.4) saturate(0.4);
   }
 }
 
-.ultra-text {
+/* streaks of light that turn inside the orb */
+.ultra-swirl {
+  position: absolute;
+  inset: -20%;
+  background: conic-gradient(
+    transparent 0 10%,
+    rgb(255 255 255 / 60%) 18%,
+    transparent 30% 45%,
+    rgb(190 225 255 / 55%) 55%,
+    transparent 68% 80%,
+    rgb(255 255 255 / 45%) 90%,
+    transparent
+  );
+  filter: blur(3px);
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation: ultra-spin 3.2s linear infinite;
+}
+
+.ultra-orb.ready .ultra-swirl {
+  opacity: 0.8;
+}
+
+.ultra-orb.active .ultra-swirl {
+  opacity: 1;
+  animation-duration: 0.6s;
+}
+
+@keyframes ultra-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.ultra-readout {
+  position: relative;
   display: grid;
-  line-height: 1.2;
+  justify-items: center;
+  line-height: 1;
+  text-shadow:
+    0 0 6px rgb(20 40 110 / 95%),
+    0 1px 2px rgb(0 0 0 / 80%);
 }
 
-.ultra-name {
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  background: linear-gradient(90deg, #ffffff, #bfe3ff 50%, #9fb8ff);
-  background-clip: text;
-  color: transparent;
-}
-
-.ultra-state {
-  font-size: 0.78rem;
+.ultra-readout b {
+  font-size: 1.5rem;
+  font-weight: 900;
   font-variant-numeric: tabular-nums;
-  color: #bfd6f5;
+  color: #fff;
+}
+
+.ultra-readout b.clock {
+  font-size: 1.1rem;
+  color: #d4e3ff;
+}
+
+.ultra-readout small {
+  margin-top: 0.18rem;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #e3f1ff;
+}
+
+.ultra-orb.charging .ultra-readout small {
+  color: var(--muted);
+}
+
+.ultra-orb.active .ultra-readout {
+  text-shadow: 0 0 8px #fff;
+}
+
+.ultra-orb.active .ultra-readout b,
+.ultra-orb.active .ultra-readout small {
+  color: #0b1640;
+}
+
+/* sparks fly off it while it is ready */
+.ultra-sparks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ultra-sparks span {
+  --turn: calc(var(--i) / var(--n) * 1turn);
+
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 6px 2px rgb(170 215 255 / 90%);
+  opacity: 0;
+  animation: ultra-spark 1.9s ease-out infinite;
+  animation-delay: calc(var(--i) * -0.27s);
+}
+
+@keyframes ultra-spark {
+  from {
+    opacity: 0;
+    transform: rotate(var(--turn)) translateY(calc(var(--size) * -0.4)) scale(0.7);
+  }
+
+  25% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+    transform: rotate(calc(var(--turn) + 50deg)) translateY(calc(var(--size) * -0.75)) scale(0.2);
+  }
+}
+
+/* the moment it is ready: a ring of light bursts out of it */
+.ultra-burst {
+  position: absolute;
+  inset: 0;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow:
+    0 0 18px rgb(190 225 255 / 90%),
+    inset 0 0 18px rgb(190 225 255 / 70%);
+  pointer-events: none;
+  animation: ultra-burst 1s ease-out both;
+}
+
+@keyframes ultra-burst {
+  from {
+    opacity: 1;
+    transform: scale(0.7);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+}
+
+.ultra-orb .hotkey {
+  top: 0.1rem;
+  left: 0.1rem;
+  font-size: 0.72rem;
+  color: #eef6ff;
+  background: rgb(5 8 20 / 88%);
+  border-color: rgb(191 227 255 / 45%);
+}
+
+.ultra-label {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 50%;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+  text-transform: uppercase;
+  color: #e3f1ff;
+  text-shadow: 0 0 8px rgb(150 210 255 / 85%);
+  background: rgb(5 8 20 / 72%);
+  border-radius: 999px;
+  transform: translateX(-50%);
+}
+
+.ultra-orb.charging .ultra-label {
+  color: var(--muted);
+  text-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ultra-halo,
+  .ultra-swirl,
+  .ultra-sparks,
+  .ultra-burst {
+    animation: none;
+  }
+
+  .ultra-sparks {
+    display: none;
+  }
 }
 
 /* Ultra Instinct on the map: the aura, the banner, the music */
@@ -2683,4 +2916,112 @@ kbd {
   background: rgb(64 196 255 / 7%);
   border-left: 3px solid var(--accent);
   border-radius: 6px;
+}
+
+/* Tooltips in game: one at a time, next to the element or the map object under the pointer */
+
+.game-tip {
+  --tip-color: var(--accent);
+
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 50;
+  display: grid;
+  gap: 0.4rem;
+  width: max-content;
+  max-width: 19rem;
+  padding: 0.6rem 0.75rem 0.65rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  background: linear-gradient(160deg, rgb(18 26 50 / 97%), rgb(8 12 26 / 97%));
+  border: 1px solid color-mix(in srgb, var(--tip-color) 45%, transparent);
+  border-left: 3px solid var(--tip-color);
+  border-radius: 10px;
+  box-shadow:
+    0 10px 28px rgb(0 0 0 / 55%),
+    0 0 18px color-mix(in srgb, var(--tip-color) 18%, transparent);
+  pointer-events: none;
+  animation: tip-in 0.14s ease-out;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.tip-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem 0.55rem;
+}
+
+.tip-head strong {
+  font-size: 0.92rem;
+  color: #fff;
+}
+
+.tip-head small {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--tip-color);
+}
+
+.tip-text {
+  margin: 0;
+  color: #c3cde8;
+}
+
+.tip-stats {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0.15rem 1rem;
+  margin: 0;
+  padding: 0.4rem 0 0;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+}
+
+.tip-stats div {
+  display: contents;
+}
+
+.tip-stats dt {
+  color: var(--muted);
+}
+
+.tip-stats dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text);
+}
+
+.tip-stats dd.good {
+  color: #6dff8e;
+}
+
+.tip-stats dd.bad {
+  color: var(--danger);
+}
+
+.tip-warning {
+  margin: 0;
+  font-weight: 600;
+  color: var(--warning);
+}
+
+.tip-hint {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-tip {
+    animation: none;
+  }
 }

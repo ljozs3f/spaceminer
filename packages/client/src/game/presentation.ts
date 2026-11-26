@@ -9,24 +9,83 @@ import {
   type WaveConfig,
 } from '@space-miner/sim';
 
-/** Display data shared by the Phaser scene and the Vue UI. */
+/**
+ * Display data shared by the Phaser scene and the Vue UI. description: the short line of the build bar;
+ * details: what the tooltips say about it.
+ */
 export const BUILDINGS: Readonly<
-  Record<BuildingType, { readonly name: string; readonly color: number; readonly description: string }>
+  Record<
+    BuildingType,
+    {
+      readonly name: string;
+      readonly color: number;
+      readonly description: string;
+      readonly details: string;
+    }
+  >
 > = {
-  mine: { name: 'Mine', color: 0x8be04e, description: 'Pulls ore from nearby asteroids' },
-  solar: { name: 'Solar', color: 0xf5d442, description: 'Powers mines and turrets' },
-  laser: { name: 'Laser', color: 0x40c4ff, description: 'Fast, short-range defense' },
-  missile: { name: 'Missile', color: 0xc77dff, description: 'Long-range splash salvos' },
-  repair: { name: 'Mender Hive', color: 0x4cf2c4, description: 'Drones repair nearby buildings' },
+  mine: {
+    name: 'Mine',
+    color: 0x8be04e,
+    description: 'Pulls ore from nearby asteroids',
+    details:
+      'Digs ore out of the nearest asteroid in its range. Build it right next to the rock: it mines nothing out of range. Uses energy.',
+  },
+  solar: {
+    name: 'Solar',
+    color: 0xf5d442,
+    description: 'Powers mines and turrets',
+    details:
+      'Makes the energy your mines, turrets and hives use. When they use more than your panels make, they all slow down.',
+  },
+  laser: {
+    name: 'Laser',
+    color: 0x40c4ff,
+    description: 'Fast, short-range defense',
+    details:
+      'A cheap turret that fires fast at the nearest pirate in its short range. Good against swarms of raiders. Uses energy.',
+  },
+  missile: {
+    name: 'Missile',
+    color: 0xc77dff,
+    description: 'Long-range splash salvos',
+    details:
+      'Fires salvos of missiles from far away (one missile per level); each blast also hits the ships around the target. Uses energy.',
+  },
+  repair: {
+    name: 'Mender Hive',
+    color: 0x4cf2c4,
+    description: 'Drones repair nearby buildings',
+    details:
+      'Keeps one repair drone per level. The drones fly to your damaged buildings in its range and weld them back up. Uses energy.',
+  },
 };
 
-/** size: relative to a grid cell. */
+/** size: relative to a grid cell; details: what the tooltips say about the ship. */
 export const ENEMIES: Readonly<
-  Record<EnemyType, { readonly name: string; readonly color: number; readonly size: number }>
+  Record<
+    EnemyType,
+    { readonly name: string; readonly color: number; readonly size: number; readonly details: string }
+  >
 > = {
-  raider: { name: 'Raider', color: 0xff8a4d, size: 0.22 },
-  gunship: { name: 'Gunship', color: 0xff4d5e, size: 0.32 },
-  dreadnought: { name: 'Dreadnought', color: 0xe040fb, size: 0.46 },
+  raider: {
+    name: 'Raider',
+    color: 0xff8a4d,
+    size: 0.22,
+    details: 'Fast and fragile, comes in numbers. Lasers and missile splash handle them.',
+  },
+  gunship: {
+    name: 'Gunship',
+    color: 0xff4d5e,
+    size: 0.32,
+    details: 'The all-rounder: tougher than a raider and hits harder.',
+  },
+  dreadnought: {
+    name: 'Dreadnought',
+    color: 0xe040fb,
+    size: 0.46,
+    details: 'Slow and tough, hits hard from further out. Missiles and upgraded lasers bring it down.',
+  },
 };
 
 /** Difficulty pips shown for a level. */
@@ -90,7 +149,7 @@ export const TIPS: readonly string[] = [
   'Red markers on the map edge show where a wave comes in.',
   'Esc or P pauses the game. Take a breath, plan, then go on.',
   'The wave timer shows what the next wave brings: hover the ship icons for their hit points.',
-  'Ultra Instinct (I) makes everything ten times better for ten seconds: save it for the big waves.',
+  'Ultra Instinct (I, the orb in the corner) makes everything ten times better for ten seconds, then recharges for two minutes: save it for the big waves.',
 ];
 
 export function cssColor(color: number): string {
@@ -160,6 +219,11 @@ export function describeStats(type: BuildingType, level: BuildingLevel): StatLin
 /** Range of a building type, for range circles (undefined: the type has no range). */
 export function rangeOf(type: BuildingType, level: BuildingLevel): number | undefined {
   return type === 'solar' ? undefined : getBuildingStats(type, level).range;
+}
+
+/** A stat value: whole numbers as they are, others with one decimal (two below 1). */
+export function formatValue(value: number): string {
+  return format(value);
 }
 
 function format(value: number): string {

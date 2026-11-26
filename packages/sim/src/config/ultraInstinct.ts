@@ -7,5 +7,5 @@ export const ULTRA_INSTINCT_CONFIG = {
   multiplier: 10,
   durationSeconds: 10,
   /** Seconds from the end of one to when the next can start. */
-  rechargeSeconds: 60,
+  rechargeSeconds: 120,
 } as const;

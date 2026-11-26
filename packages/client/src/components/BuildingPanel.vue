@@ -2,6 +2,8 @@
 import { computed } from 'vue';
 import { BUILDINGS, cssColor } from '../game/presentation';
 import { buildingSprite } from '../game/sprites';
+import { sellTip } from '../game/tips';
+import { vTip } from '../game/tooltip';
 import type { BuildingView } from '../game/views';
 import SpriteIcon from './SpriteIcon.vue';
 import UiIcon from './UiIcon.vue';
@@ -81,10 +83,10 @@ const rows = computed(() =>
       </p>
       <p v-if="!building.upgrade" class="maxed">Fully upgraded</p>
       <button
+        v-tip="sellTip(building)"
         type="button"
         class="sell-button"
         :disabled="!building.sellable"
-        :title="building.sellable ? undefined : 'Your last building cannot be sold'"
         @click="$emit('sell')"
       >
         <UiIcon name="sell" />

@@ -6,6 +6,8 @@ import {
   findById,
   getBuildingStats,
   isUltraInstinctActive,
+  TICK_RATE,
+  ULTRA_INSTINCT_CONFIG,
   validateCommand,
   type AsteroidSize,
   type BuildingLevel,
@@ -15,7 +17,7 @@ import {
   type TurretType,
 } from '@space-miner/sim';
 import * as Phaser from 'phaser';
-import type { EventBus, GameEvents } from '../events';
+import type { EventBus, GameEvents, MapTarget } from '../events';
 import type { GameSession, Point } from '../game/GameSession';
 import { BUILDINGS, ENEMIES, rangeOf } from '../game/presentation';
 import {
@@ -50,7 +52,9 @@ const COLORS = {
   /** The hit point bar of a building that drones are repairing. */
   hpRepair: 0x4cf2c4,
   pip: 0xffffff,
-  /** Ultra Instinct: the silver-blue aura around the buildings and its brighter sparks. */
+  /** The outline of what the pointer is over. */
+  hover: 0xffffff,
+  /** Ultra Instinct: the silver-blue aura around the buildings, and its white-hot core. */
   aura: 0x9fd4ff,
   auraCore: 0xeef8ff,
 } as const;
@@ -64,8 +68,13 @@ const DEPTH = {
   asteroidGlow: 1.5,
   asteroids: 2,
   asteroidShine: 2.1,
+  /** Ultra Instinct: the heat glowing around the buildings. */
+  ultraHeat: 2.9,
   buildings: 3,
   buildingParts: 3.05,
+  /** Ultra Instinct: the buildings glow white-hot, and boil. */
+  ultraShine: 3.1,
+  ultraBoil: 3.2,
   effects: 4,
   placement: 5,
   projectiles: 6,
@@ -107,6 +116,20 @@ const BUILD_MS = 380;
 const DRAG_PX = 6;
 /** How fast a mine's arms start and stop working (per second). */
 const MINE_WORK_EASE = 3;
+/**
+ * Ultra Instinct: the buildings flare up as it starts (s), flicker out over its last seconds, and the ring of
+ * light that bursts out of each one as it starts (ms). Per building: bubbles boiling on it, tongues of heat
+ * rising off it, ripples of heat going out of it (and how often, s).
+ */
+const ULTRA_HEAT = {
+  riseSeconds: 0.35,
+  fadeSeconds: 1.6,
+  flareMs: 650,
+  bubbles: 9,
+  wisps: 8,
+  ripples: 2,
+  rippleSeconds: 0.9,
+} as const;
 /** Keys that pan the map. */
 const PAN_KEYS: Readonly<Record<string, string>> = {
   arrowleft: 'left',
@@ -131,12 +154,20 @@ export class GameScene extends Phaser.Scene {
     asteroids: SpriteLayer;
     asteroidShine: SpriteLayer;
     buildings: SpriteLayer;
+    ultraHeat: SpriteLayer;
+    ultraShine: SpriteLayer;
     projectiles: SpriteLayer;
     drones: SpriteLayer;
     enemies: SpriteLayer;
   };
   /** The moving parts of the mines, one layer per part (two arms, the level 3 bottom drill). */
   private partLayers: SpriteLayer[] = [];
+  /** Ultra Instinct: the mines' moving parts glowing, one layer per part. */
+  private partShineLayers: SpriteLayer[] = [];
+  /** Ultra Instinct: the bubbles and the heat of the boiling buildings, added (it glows). */
+  private ultraFx!: Phaser.GameObjects.Graphics;
+  /** When the player's Ultra Instinct last started (scene ms), for the ring of light it bursts out with. */
+  private ultraStartMs = Number.NEGATIVE_INFINITY;
   private readonly mineRigs = new Map<BuildingLevel, MineRig>();
   /** How hard each mine is working, 0 to 1, eased so the arms start and stop smoothly. */
   private readonly mineWork = new Map<EntityId, number>();
@@ -153,6 +184,8 @@ export class GameScene extends Phaser.Scene {
     dragging: boolean;
   } | null = null;
   private pointerInside = false;
+  /** What the pointer is over on the map, for its tooltip and outline. */
+  private hovered: MapTarget | null = null;
   private placementGhost!: Phaser.GameObjects.Image;
   private placing: BuildingType | null = null;
   private selectedId: EntityId | null = null;
@@ -192,6 +225,7 @@ export class GameScene extends Phaser.Scene {
       seed,
     );
     this.overlay = this.add.graphics().setDepth(DEPTH.overlay);
+    this.ultraFx = this.add.graphics().setDepth(DEPTH.ultraBoil).setBlendMode(Phaser.BlendModes.ADD);
     this.effects = new Effects(this, DEPTH.effects, CELL_SIZE);
     // the starting buildings are already standing
     for (const building of this.session.state.buildings) {
@@ -202,6 +236,8 @@ export class GameScene extends Phaser.Scene {
       asteroids: new SpriteLayer(this, DEPTH.asteroids),
       asteroidShine: new SpriteLayer(this, DEPTH.asteroidShine, Phaser.BlendModes.ADD),
       buildings: new SpriteLayer(this, DEPTH.buildings),
+      ultraHeat: new SpriteLayer(this, DEPTH.ultraHeat, Phaser.BlendModes.ADD),
+      ultraShine: new SpriteLayer(this, DEPTH.ultraShine, Phaser.BlendModes.ADD),
       projectiles: new SpriteLayer(this, DEPTH.projectiles),
       drones: new SpriteLayer(this, DEPTH.drones),
       enemies: new SpriteLayer(this, DEPTH.enemies),
@@ -215,6 +251,10 @@ export class GameScene extends Phaser.Scene {
     }
     const parts = Math.max(0, ...[...this.mineRigs.values()].map((rig) => rig.parts.length));
     this.partLayers = Array.from({ length: parts }, () => new SpriteLayer(this, DEPTH.buildingParts));
+    this.partShineLayers = Array.from(
+      { length: parts },
+      () => new SpriteLayer(this, DEPTH.ultraShine, Phaser.BlendModes.ADD),
+    );
     this.placementGhost = this.add
       .image(0, 0, '__DEFAULT')
       .setDepth(DEPTH.placement)
@@ -278,9 +318,10 @@ export class GameScene extends Phaser.Scene {
       this.bus.on('selection:change', (id) => {
         this.selectedId = id;
       }),
-      // Ultra Instinct flares up: a silver-blue flash and a jolt
+      // Ultra Instinct flares up: a silver-blue flash, a jolt, a ring of light out of every building
       this.bus.on('command:applied', (command) => {
         if (command.type !== 'ultraInstinct') return;
+        this.ultraStartMs = this.time.now;
         this.cameras.main.flash(420, 200, 230, 255);
         this.cameras.main.shake(260, 0.005);
       }),
@@ -316,7 +357,9 @@ export class GameScene extends Phaser.Scene {
     }
     const pointer = this.input.activePointer;
     this.hoveredCell = this.pointerInside ? this.cellAt(pointer) : null;
+    this.updateHover(pointer);
     this.overlay.clear();
+    this.ultraFx.clear();
     this.backdrop.update(this.time.now);
     this.drawAsteroids();
     this.drawBuildings(alpha);
@@ -326,7 +369,8 @@ export class GameScene extends Phaser.Scene {
     this.effects.drawDrones(this.drawDrones(alpha), this.time.now);
     this.forgetRemoved();
     this.drawPlacementPreview();
-    for (const layer of [...Object.values(this.layers), ...this.partLayers]) layer.sweep();
+    for (const layer of [...Object.values(this.layers), ...this.partLayers, ...this.partShineLayers])
+      layer.sweep();
   }
 
   /** A press that moves far enough pans the map (with any button); hovering updates the placement preview. */
@@ -388,6 +432,49 @@ export class GameScene extends Phaser.Scene {
     else if (key === '0') this.camera.reset();
     const type = BUILDING_TYPES[Number(event.key) - 1];
     if (type) this.bus.emit('placement:select', type);
+  }
+
+  /**
+   * What the pointer is over: a pirate ship (they fly over everything), else a building, else an asteroid.
+   * Nothing while placing a building or panning. Tells the UI when it changes (the tooltip), and the
+   * pointer becomes a hand over what can be clicked.
+   */
+  private updateHover(pointer: Phaser.Input.Pointer): void {
+    const next =
+      this.pointerInside && this.placing === null && !this.press?.dragging ? this.objectAt(pointer) : null;
+    if (next?.id === this.hovered?.id && next?.kind === this.hovered?.kind) return;
+    this.hovered = next;
+    this.bus.emit('hover:change', next);
+    const clickable = next !== null && next.kind !== 'enemy';
+    this.game.canvas.style.cursor = clickable ? 'pointer' : '';
+  }
+
+  private objectAt(pointer: Phaser.Input.Pointer): MapTarget | null {
+    const world = this.camera.toWorld(pointer.x, pointer.y);
+    const x = world.x / CELL_SIZE;
+    const y = world.y / CELL_SIZE;
+    const { enemies, buildings, asteroids, level } = this.session.state;
+    let ship: MapTarget | null = null;
+    let nearest = Number.POSITIVE_INFINITY;
+    for (const enemy of enemies) {
+      const distance = Math.hypot(enemy.x - x, enemy.y - y);
+      if (distance < SPRITE_SIZE.ship[enemy.type] / 2 && distance < nearest) {
+        nearest = distance;
+        ship = { kind: 'enemy', id: enemy.id };
+      }
+    }
+    if (ship) return ship;
+    const cellX = Math.floor(x);
+    const cellY = Math.floor(y);
+    if (cellX < 0 || cellY < 0 || cellX >= level.width || cellY >= level.height) return null;
+    const building = findAt(buildings, cellX, cellY);
+    if (building) return { kind: 'building', id: building.id };
+    const asteroid = findAsteroidAt(asteroids, cellX, cellY);
+    return asteroid ? { kind: 'asteroid', id: asteroid.id } : null;
+  }
+
+  private isHovered(id: EntityId): boolean {
+    return this.hovered?.id === id;
   }
 
   /** The new ships are on the map edges: mark where they come in, and the view shudders. */
@@ -481,6 +568,8 @@ export class GameScene extends Phaser.Scene {
       }
       if (asteroid.id === this.selectedId) {
         g.lineStyle(2, COLORS.selection, 0.9).strokeCircle(x, y, radius + 3);
+      } else if (this.isHovered(asteroid.id)) {
+        g.lineStyle(1.5, COLORS.hover, 0.45).strokeCircle(x, y, radius + 3);
       }
     }
   }
@@ -489,9 +578,7 @@ export class GameScene extends Phaser.Scene {
     const g = this.overlay;
     const now = this.time.now;
     const { state } = this.session;
-    const boosted = new Set(
-      state.players.filter((player) => isUltraInstinctActive(state, player)).map((player) => player.id),
-    );
+    const heats = new Map(state.players.map((player) => [player.id, this.ultraHeat(player)]));
     const repairing = new Set(
       this.session.state.drones.flatMap((drone) =>
         drone.repairing && drone.targetId !== null ? [drone.targetId] : [],
@@ -502,14 +589,27 @@ export class GameScene extends Phaser.Scene {
       const grow = this.buildProgress(building.id, building.level, x, y, BUILDINGS[building.type].color, now);
       const sprite = buildingSprite(building.type, building.level);
       const rig = building.type === 'mine' ? this.mineRigs.get(building.level) : undefined;
+      const heat = heats.get(building.ownerId) ?? 0;
       if (sprite) {
-        const size = SPRITE_SIZE.building[building.level] * CELL_SIZE * grow;
+        // in Ultra Instinct it boils: swells and trembles, and glows white-hot
+        const boil = heat > 0 ? boilMotion(building.id, now, heat) : { dx: 0, dy: 0, scale: 1 };
+        const bx = x + boil.dx;
+        const by = y + boil.dy;
+        const size = SPRITE_SIZE.building[building.level] * CELL_SIZE * grow * boil.scale;
         const rotation =
           building.type === 'laser' ? this.aim(building.id, building.targetId, x, y, alpha) : 0;
-        this.layers.buildings.draw(building.id, rig?.body ?? sprite, x, y, size, rotation);
-        if (rig) this.drawMineParts(building.id, building.targetId !== null, rig, x, y, size);
+        const texture = rig?.body ?? sprite;
+        this.layers.buildings.draw(building.id, texture, bx, by, size, rotation);
+        const shine = heat > 0 ? whiteHot(building.id, now, heat) : null;
+        if (shine) {
+          this.layers.ultraShine
+            .draw(building.id, texture, bx, by, size, rotation)
+            .setTint(shine.tint)
+            .setAlpha(shine.alpha);
+        }
+        if (rig) this.drawMineParts(building.id, building.targetId !== null, rig, bx, by, size, shine);
       } else drawBuildingShape(g, building.type, x, y, 1);
-      if (boosted.has(building.ownerId)) this.drawAura(building.id, x, y, now);
+      if (heat > 0) this.drawUltraHeat(building.id, x, y, heat, now);
 
       // level pips
       g.fillStyle(0x000000, 0.55).fillRoundedRect(x - 10, y + CELL_SIZE * 0.36 - 3.5, 20, 7, 3);
@@ -527,6 +627,14 @@ export class GameScene extends Phaser.Scene {
         );
       }
 
+      if (building.id !== this.selectedId && this.isHovered(building.id)) {
+        g.lineStyle(1.5, COLORS.hover, 0.45).strokeRect(
+          x - CELL_SIZE / 2 + 1,
+          y - CELL_SIZE / 2 + 1,
+          CELL_SIZE - 2,
+          CELL_SIZE - 2,
+        );
+      }
       if (building.id === this.selectedId) {
         g.lineStyle(2, COLORS.selection, 0.9).strokeRect(
           x - CELL_SIZE / 2 + 1,
@@ -540,23 +648,97 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Ultra Instinct: a silver-blue aura flickers around the building, and sparks of it rise. */
-  private drawAura(id: EntityId, x: number, y: number, now: number): void {
-    const g = this.overlay;
+  /**
+   * How hot a player's buildings glow in Ultra Instinct, 0 (off) to 1: they flare up as it starts, and over
+   * its last seconds they die down, stuttering.
+   */
+  private ultraHeat(player: { readonly ultraInstinctUntilTick: number }): number {
+    const { state } = this.session;
+    if (!isUltraInstinctActive(state, player)) return 0;
+    const left = (player.ultraInstinctUntilTick - state.tick) / TICK_RATE;
+    const elapsed = ULTRA_INSTINCT_CONFIG.durationSeconds - left;
+    const rise = Math.min(1, 0.3 + elapsed / ULTRA_HEAT.riseSeconds);
+    if (left > ULTRA_HEAT.fadeSeconds) return rise;
+    const stutter = Math.sin((this.time.now / 1000) * 31) > -0.3 ? 1 : 0.4;
+    return rise * (0.25 + 0.75 * (left / ULTRA_HEAT.fadeSeconds)) * stutter;
+  }
+
+  /**
+   * Ultra Instinct around a building: a pulsing glow of heat, the aura's edge, bubbles that boil up on it,
+   * swell and burst, and tongues of heat rising off it; as it starts, a ring of light bursts out of it.
+   */
+  private drawUltraHeat(id: EntityId, x: number, y: number, heat: number, now: number): void {
+    const g = this.ultraFx;
     const seconds = now / 1000;
     const phase = hash(id) * Math.PI * 2;
     const pulse = 0.5 + 0.5 * Math.sin(seconds * 7 + phase);
-    const radius = CELL_SIZE * (0.5 + 0.06 * pulse);
-    g.fillStyle(COLORS.aura, 0.06 + 0.05 * pulse).fillCircle(x, y, radius + 3);
-    g.lineStyle(2, COLORS.aura, 0.35 + 0.35 * pulse).strokeCircle(x, y, radius);
-    g.lineStyle(1, COLORS.auraCore, 0.55 * (1 - pulse)).strokeCircle(x, y, radius * 0.84);
-    const sparks = 4;
-    for (let i = 0; i < sparks; i++) {
-      const rise = (seconds * 0.9 + i / sparks + hash(id + i)) % 1;
-      const angle = phase + i * 1.7;
-      const sparkX = x + Math.cos(angle) * CELL_SIZE * 0.34;
-      const sparkY = y + CELL_SIZE * 0.35 - rise * CELL_SIZE * 0.95;
-      g.fillStyle(COLORS.auraCore, 0.85 * (1 - rise)).fillCircle(sparkX, sparkY, 0.6 + 1.6 * (1 - rise));
+    const flicker = 0.5 + 0.5 * Math.sin(seconds * 23 + phase) * Math.sin(seconds * 7.3 + phase * 3);
+    this.layers.ultraHeat
+      .draw(id, GLOW_TEXTURE, x, y, CELL_SIZE * (2.6 + 0.4 * pulse), null)
+      .setTint(mixColors(COLORS.aura, COLORS.auraCore, flicker * 0.6))
+      .setAlpha(heat * (0.7 + 0.3 * flicker));
+
+    const radius = CELL_SIZE * (0.52 + 0.06 * pulse);
+    g.lineStyle(2, COLORS.aura, heat * (0.3 + 0.4 * pulse)).strokeCircle(x, y, radius);
+    g.lineStyle(1, COLORS.auraCore, heat * 0.55 * (1 - pulse)).strokeCircle(x, y, radius * 0.84);
+
+    // the heat ripples out of it, as from a boiling pot
+    for (let i = 0; i < ULTRA_HEAT.ripples; i++) {
+      const ripple = (seconds / ULTRA_HEAT.rippleSeconds + i / ULTRA_HEAT.ripples + hash(id + 0.5)) % 1;
+      g.lineStyle(2.5 * (1 - ripple), COLORS.aura, heat * 0.6 * (1 - ripple)).strokeCircle(
+        x,
+        y,
+        CELL_SIZE * (0.5 + 0.75 * ripple),
+      );
+    }
+
+    for (let i = 0; i < ULTRA_HEAT.bubbles; i++) {
+      const seed = id * 31 + i * 7;
+      const cycle = seconds / (0.5 + hash(seed) * 0.5) + hash(seed + 1);
+      const life = cycle % 1;
+      // every bubble comes up somewhere else on the building
+      const round = Math.floor(cycle);
+      const angle = hash(seed + round * 13) * Math.PI * 2;
+      const distance = CELL_SIZE * 0.36 * Math.sqrt(hash(seed + round * 17 + 5));
+      const bx = x + Math.cos(angle) * distance;
+      const by = y + Math.sin(angle) * distance - life * 4;
+      if (life < 0.78) {
+        const size = 1 + 4 * (life / 0.78);
+        g.fillStyle(COLORS.aura, heat * 0.22).fillCircle(bx, by, size + 1.5);
+        g.fillStyle(COLORS.auraCore, heat * 0.45 * (0.4 + life)).fillCircle(bx, by, size);
+        g.lineStyle(1, COLORS.auraCore, heat * 0.9).strokeCircle(bx, by, size + 0.6);
+      } else {
+        const burst = (life - 0.78) / 0.22;
+        g.lineStyle(2 * (1 - burst) + 0.5, COLORS.auraCore, heat * (1 - burst)).strokeCircle(
+          bx,
+          by,
+          5 + burst * 7,
+        );
+      }
+    }
+
+    for (let i = 0; i < ULTRA_HEAT.wisps; i++) {
+      const rise = (seconds * 1.3 + i / ULTRA_HEAT.wisps + hash(id + i * 3)) % 1;
+      const angle = phase + i * 2.4;
+      const wx = x + Math.cos(angle) * CELL_SIZE * 0.32 + Math.sin(rise * 9 + i) * 3;
+      const wy = y + CELL_SIZE * 0.25 - rise * CELL_SIZE * 1.6;
+      const size = 1.5 + 4.5 * (1 - rise);
+      // a soft edge and a hot core
+      g.fillStyle(COLORS.aura, heat * 0.3 * (1 - rise)).fillCircle(wx, wy, size * 1.7);
+      g.fillStyle(rise < 0.4 ? COLORS.auraCore : COLORS.aura, heat * 0.6 * (1 - rise)).fillCircle(
+        wx,
+        wy,
+        size,
+      );
+    }
+
+    const flare = (now - this.ultraStartMs) / ULTRA_HEAT.flareMs;
+    if (flare >= 0 && flare < 1) {
+      g.lineStyle(3 * (1 - flare) + 0.5, COLORS.auraCore, 1 - flare).strokeCircle(
+        x,
+        y,
+        CELL_SIZE * (0.5 + 1.8 * flare),
+      );
     }
   }
 
@@ -571,6 +753,8 @@ export class GameScene extends Phaser.Scene {
     x: number,
     y: number,
     size: number,
+    /** Ultra Instinct: how the parts glow. */
+    shine: { readonly tint: number; readonly alpha: number } | null,
   ): void {
     const current = this.mineWork.get(id) ?? 0;
     const step = Math.min(1, (this.frameMs / 1000) * MINE_WORK_EASE);
@@ -582,9 +766,17 @@ export class GameScene extends Phaser.Scene {
       const motion = partMotion(part, work, seconds, phase);
       const px = x + (part.originX - 0.5) * size;
       const py = y + (part.originY - 0.5) * size + (part.motion === 'pump' ? (motion / 128) * size : 0);
+      const rotation = part.motion === 'swing' ? motion : 0;
       this.partLayers[index]
-        ?.draw(id, part.texture, px, py, size, part.motion === 'swing' ? motion : 0)
+        ?.draw(id, part.texture, px, py, size, rotation)
         .setOrigin(part.originX, part.originY);
+      if (shine) {
+        this.partShineLayers[index]
+          ?.draw(id, part.texture, px, py, size, rotation)
+          .setOrigin(part.originX, part.originY)
+          .setTint(shine.tint)
+          .setAlpha(shine.alpha);
+      }
     });
   }
 
@@ -648,6 +840,7 @@ export class GameScene extends Phaser.Scene {
         halfHeight = drawShipShape(g, enemy.type, x, y);
       }
       if (enemy.hp < enemy.maxHp) drawHpBar(g, x, y - halfHeight - 5, enemy.hp / enemy.maxHp);
+      if (this.isHovered(enemy.id)) g.lineStyle(1.5, COLORS.hover, 0.45).strokeCircle(x, y, halfHeight + 4);
     }
   }
 
@@ -860,6 +1053,33 @@ function drawAsteroidShape(
 }
 
 /** 0 to 1 with a small overshoot at the end, for things that pop into place. */
+/** Ultra Instinct: a building boils, it swells and trembles a little, faster than the eye can follow. */
+function boilMotion(
+  id: EntityId,
+  now: number,
+  heat: number,
+): { readonly dx: number; readonly dy: number; readonly scale: number } {
+  const seconds = now / 1000;
+  const phase = hash(id) * Math.PI * 2;
+  return {
+    dx: heat * 0.9 * Math.sin(seconds * 47 + phase),
+    dy: heat * 0.9 * Math.cos(seconds * 53 + phase * 1.7),
+    scale: 1 + heat * (0.035 * Math.sin(seconds * 19 + phase) + 0.02 * Math.sin(seconds * 31 + phase * 2.3)),
+  };
+}
+
+/** Ultra Instinct: the building's sprite once more, added on top in a flickering silver-white: it glows white-hot. */
+function whiteHot(
+  id: EntityId,
+  now: number,
+  heat: number,
+): { readonly tint: number; readonly alpha: number } {
+  const seconds = now / 1000;
+  const phase = hash(id) * Math.PI * 2;
+  const flicker = 0.5 + 0.5 * Math.sin(seconds * 23 + phase) * Math.sin(seconds * 7.3 + phase * 3);
+  return { tint: mixColors(COLORS.aura, COLORS.auraCore, flicker), alpha: heat * (0.4 + 0.35 * flicker) };
+}
+
 function easeOutBack(t: number): number {
   const c = 1.7;
   return t >= 1 ? 1 : 0.4 + 0.6 * (1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2);

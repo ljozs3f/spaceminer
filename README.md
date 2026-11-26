@@ -151,8 +151,9 @@ The soundtrack is fixed, only its volume can be changed (or muted): `loading.*` 
 `src/assets/music/` plays in the intro, the loading screens and the menu, `game.*` in a sector; while pirates
 attack, the game track opens up (a lowpass opens, a little louder). The files are fetched while the game loads
 and loop without the encoder's silence. Where a file is missing, the built-in soundtrack plays: "Nebula
-Rites" in the intro, the loading screens and the menu, "Sentinel Expanse" in a sector, so the two never sound
-alike (`src/audio/songs/`), written as note data and played by `SongPlayer` with synthesized instruments
+Rites" in the intro, the loading screens and the menu, as a slow ambient without drums or melody (choir,
+glassy arpeggios, bells), and the driving "Sentinel Expanse" in a sector, so the two never sound alike
+(`src/audio/songs/`), written as note data and played by `SongPlayer` with synthesized instruments
 (choir pads, string ostinatos, a horn section, film drums in the battle layer), through a mix bus
 (`MusicPlayer`: rumble and harshness cut, a glue compressor, soft saturation). Browsers allow audio only after
 a user gesture, so the engine starts with the click that launches the game.
@@ -207,13 +208,17 @@ the repository without changes elsewhere.
   hit points, until wave 10, after which the waves stay at that strength. The HUD shows the next wave.
 - A destroyed ship pays a bounty in ore to the owner of the turret that destroyed it, so the defense keeps
   paying when the asteroids near the base run dry. Bounties do not count towards the mined ore.
-- **Ultra Instinct** (the button next to the buildings, or I): for 10 seconds every building of the player
+- **Ultra Instinct** (the glowing orb in the bottom right corner of the map, or I): for 10 seconds every
+  building of the player
   works 10 times better: mines mine 10 times as fast, solar panels make 10 times their energy, turrets fire 10
   times as fast (more than once a tick if needed), repair drones fly and repair 10 times as fast, and the
-  buildings take a tenth of the damage. Then it recharges for 60 seconds (the button's ring fills up). The
-  values are in `ULTRA_INSTINCT_CONFIG` (`packages/sim/src/config/ultraInstinct.ts`). While it is on, the
-  buildings glow in a flickering silver-blue aura with rising sparks, the map edges glow, a banner counts
-  the seconds down and its music plays (see Sound).
+  buildings take a tenth of the damage. Then it recharges for 2 minutes: the orb's ring fills up with the
+  time left in it, and an alert says when it is charged; ready, the orb swirls and gives off sparks. The
+  values are in `ULTRA_INSTINCT_CONFIG` (`packages/sim/src/config/ultraInstinct.ts`). While it is on, every
+  building glows white-hot and boils: it swells and trembles, bubbles boil up on it and burst, heat rises off
+  it in tongues, in a pulsing silver-blue glow; as it starts a ring of light bursts out of each building, and
+  over the last seconds they die down, stuttering. The map edges glow, a banner counts the seconds down and
+  its music plays (see Sound).
 - Ten sectors (levels) with rising difficulty. They differ in where the base starts (west, the middle, a
   corner, the east rim), how the ore lies, which map edges the pirates come from (every side, only the east,
   the north and the south, ...: `spawnEdges` in the level config), how early the heavy ships come and how fast
@@ -243,6 +248,13 @@ button or the arrow/WASD keys pan, and the stars and the background follow with 
 button pause the game. M
 mutes the sound; the speaker button (top right) has the music and effects volumes. The sound settings are
 saved.
+
+Pointing at anything in game shows a tooltip (one at a time, `src/components/GameTooltip.vue`): the
+buildings of the build bar (what they do, cost, stats, the ore still missing), the HUD (ore, energy, mined
+ore, the next wave, the pirates on the map), the Ultra Instinct orb, the zoom and sell buttons (the `v-tip`
+directive, `src/game/tooltip.ts`), and on the map the buildings (level, hit points, stats, what they are
+doing, low power), the asteroids (ore left, mines on them) and the pirate ships (hit points, damage, speed,
+bounty), which also get a thin outline (the texts: `src/game/tips.ts`).
 
 Leaving a running sector always asks first, because the session cannot be continued and the sector starts
 over: the back button of the HUD, leaving or restarting from the pause menu and the browser's back button (the

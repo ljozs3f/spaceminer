@@ -3,10 +3,12 @@ import { getWaveComposition, type BuildingType, type EntityId, type LevelConfig 
 import { computed, onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from 'vue';
 import type { AudioEngine } from '../audio/AudioEngine';
 import { GameAudio } from '../audio/GameAudio';
-import { EventBus, type AlertKind, type GameEvents } from '../events';
+import { EventBus, type AlertKind, type GameEvents, type MapTarget } from '../events';
 import { AlertMonitor } from '../game/AlertMonitor';
 import { GameSession } from '../game/GameSession';
 import { describeSpawnEdges } from '../game/presentation';
+import { buttonTip, mapTip } from '../game/tips';
+import { vTip, type TipContent } from '../game/tooltip';
 import { selectHud, selectSelection, type MapSpot } from '../game/views';
 import { createPhaserGame } from '../phaser/createPhaserGame';
 import type { MapView } from '../phaser/CameraController';
@@ -17,6 +19,7 @@ import AsteroidPanel from './AsteroidPanel.vue';
 import BuildingPanel from './BuildingPanel.vue';
 import GameMenu from './GameMenu.vue';
 import GameOverlay from './GameOverlay.vue';
+import GameTooltip from './GameTooltip.vue';
 import HudBar from './HudBar.vue';
 import MapPopup from './MapPopup.vue';
 import UltraInstinctButton from './UltraInstinctButton.vue';
@@ -76,9 +79,20 @@ let askedFromPause = false;
 const wave = shallowRef<WaveNotice | null>(null);
 let waveTimer = 0;
 const arriving = shallowRef(props.arrival);
+/** What the pointer is over on the map, and its tooltip. */
+const hovered = shallowRef<MapTarget | null>(null);
+const hoverTip = shallowRef<TipContent | null>(null);
+const piratesFrom = describeSpawnEdges(props.level.waves);
+
+const ZOOM_TIPS = {
+  in: buttonTip('Zoom in', '+ or the mouse wheel'),
+  reset: buttonTip('Show the whole map', '0'),
+  out: buttonTip('Zoom out', '−'),
+} as const;
 
 watch(menu, (open) => {
   session.setPaused(open !== null);
+  refreshHoverTip();
 });
 /** The game runs: not paused and not over. */
 const running = computed(() => menu.value === null && result.value === null);
@@ -86,6 +100,14 @@ const running = computed(() => menu.value === null && result.value === null);
 function refresh(): void {
   hud.value = selectHud(session.state, props.playerId);
   selected.value = selectSelection(session.state, props.playerId, selectedId.value);
+  refreshHoverTip();
+}
+
+/** The selected object shows its popup instead; nothing while a menu is open or the game is over. */
+function refreshHoverTip(): void {
+  const target = hovered.value;
+  const quiet = !target || target.id === selectedId.value || menu.value !== null || result.value !== null;
+  hoverTip.value = quiet ? null : mapTip(session.state, props.playerId, target);
 }
 
 function showAlert(kind: AlertKind, text: string): void {
@@ -107,11 +129,16 @@ const unsubscribers = [
   bus.on('placement:select', (type) => {
     placing.value = type;
   }),
+  bus.on('hover:change', (target) => {
+    hovered.value = target;
+    refreshHoverTip();
+  }),
   bus.on('alert', ({ kind, text }) => {
     showAlert(kind, text);
   }),
   bus.on('game:over', (status) => {
     result.value = status;
+    refreshHoverTip();
     if (status === 'won') emit('won', props.level);
   }),
   bus.on('view:change', (next) => {
@@ -300,7 +327,13 @@ function closeSelection(): void {
 
 <template>
   <div class="game-view">
-    <HudBar :hud="hud" :level-name="level.name" @exit="requestExit" @pause="openPause" />
+    <HudBar
+      :hud="hud"
+      :level-name="level.name"
+      :pirates-from="piratesFrom"
+      @exit="requestExit"
+      @pause="openPause"
+    />
     <div ref="field" class="field">
       <div ref="host" class="canvas-host" />
       <MapPopup v-if="selected && anchor" :key="selected.id" :anchor="anchor">
@@ -317,21 +350,20 @@ function closeSelection(): void {
       <WaveBanner :wave="wave" />
       <AlertStack :alerts="alerts" />
       <div class="zoom-controls" role="group" aria-label="Zoom">
-        <button type="button" title="Zoom in (+ or the mouse wheel)" aria-label="Zoom in" @click="zoom('in')">
-          +
-        </button>
+        <button v-tip="ZOOM_TIPS.in" type="button" aria-label="Zoom in" @click="zoom('in')">+</button>
         <button
+          v-tip="ZOOM_TIPS.reset"
           type="button"
           class="zoom-level"
-          title="Show the whole map (0)"
           aria-label="Show the whole map"
           @click="zoom('reset')"
         >
           {{ zoomPercent }}%
         </button>
-        <button type="button" title="Zoom out (−)" aria-label="Zoom out" @click="zoom('out')">−</button>
+        <button v-tip="ZOOM_TIPS.out" type="button" aria-label="Zoom out" @click="zoom('out')">−</button>
         <span v-if="view.zoom > 1" class="zoom-hint">Drag or WASD to pan</span>
       </div>
+      <UltraInstinctButton v-if="!result" :view="hud.ultraInstinct" @activate="ultraInstinct" />
       <GameOverlay
         v-if="result"
         :status="result"
@@ -341,9 +373,7 @@ function closeSelection(): void {
         @exit="emit('exit')"
       />
     </div>
-    <BuildBar :ore="hud.ore" :placing="placing" @select="selectPlacement">
-      <UltraInstinctButton :view="hud.ultraInstinct" @activate="ultraInstinct" />
-    </BuildBar>
+    <BuildBar :ore="hud.ore" :placing="placing" @select="selectPlacement" />
     <GameMenu
       v-if="menu && !result"
       :key="menu"
@@ -356,6 +386,7 @@ function closeSelection(): void {
       @confirm="confirmQuestion"
       @cancel="cancelQuestion"
     />
+    <GameTooltip :map-tip="hoverTip" />
     <div v-if="arriving" class="arrival-flash" aria-hidden="true" />
   </div>
 </template>

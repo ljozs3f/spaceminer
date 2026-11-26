@@ -4,6 +4,10 @@ import type { Song, SongSection, SongSound } from '../song';
  * "Nebula Rites", an original composition: E minor, 96 BPM, mysterious rather than bouncy. A choir-like pad,
  * soft glassy arpeggios and a flute-like lead carry a short hook; the Phrygian F major and the harmonic-minor
  * B major give it its mystery. In battle, cinematic drums, a driving bass and chord stabs take over.
+ *
+ * The menu (the intro, the loading screens and the menu) plays it as a slow ambient, without drums and without
+ * the melody: only the choir, the glassy arpeggios and bells, so it never sounds like the driving music of a
+ * sector (songs/index.ts).
  */
 
 const ARP = {
@@ -73,6 +77,14 @@ const SECTIONS = {
     drums: false,
     bells: 0.45,
   },
+  // the menu's ambient: the choir, slow shimmering arpeggios opening up, bells
+  haze: {
+    chords: ['Cmaj7', 'Am', 'Em', 'Em', 'Cmaj7', 'Am', 'Bsus4', 'B'],
+    arp: ARP.shimmer,
+    drums: false,
+    bells: 0.35,
+    sweep: [0.6, 1],
+  },
 } as const satisfies Record<string, SongSection>;
 
 const SOUND: SongSound = {
@@ -112,9 +124,9 @@ const SOUND: SongSound = {
 
 export const NEBULA_RITES = {
   menu: {
-    tempo: 96,
+    tempo: 76,
     sections: SECTIONS,
-    arrangement: ['intro', 'mystery', 'drift'],
+    arrangement: ['intro', 'drift', 'haze', 'drift'],
     loopFrom: 1,
     battle: false,
     sound: SOUND,

@@ -24,6 +24,14 @@ export interface GameEvents {
   'view:change': MapView;
   /** The zoom buttons. */
   'view:zoom': 'in' | 'out' | 'reset';
+  /** What the pointer is over on the map (null: nothing), for its tooltip. */
+  'hover:change': MapTarget | null;
+}
+
+/** Something on the map: a building, an asteroid or a pirate ship (entity ids are unique across kinds). */
+export interface MapTarget {
+  readonly kind: 'building' | 'asteroid' | 'enemy';
+  readonly id: EntityId;
 }
 
 export type AlertKind = 'info' | 'warning' | 'danger' | 'error';

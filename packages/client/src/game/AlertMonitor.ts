@@ -2,6 +2,7 @@ import {
   energyEfficiency,
   findPlayer,
   getWaveComposition,
+  isUltraInstinctActive,
   TICK_RATE,
   ticksUntilNextWave,
   type GameEvent,
@@ -30,6 +31,8 @@ export class AlertMonitor {
   private announcedWave = -1;
   private lastAttackTick = Number.NEGATIVE_INFINITY;
   private lastDestroyedTick = Number.NEGATIVE_INFINITY;
+  /** Ultra Instinct was recharging in the last tick, to tell when it is ready again. */
+  private ultraRecharging = false;
 
   constructor(
     private readonly session: GameSession,
@@ -39,6 +42,7 @@ export class AlertMonitor {
       bus.on('tick', () => {
         this.checkEnergy();
         this.checkWave();
+        this.checkUltraInstinct();
       }),
       bus.on('sim:events', (events) => {
         for (const event of events) this.onEvent(event);
@@ -86,6 +90,20 @@ export class AlertMonitor {
       kind: 'info',
       text: `Wave ${String(state.wave.index + 1)} in ${String(WAVE_NOTICE_SECONDS)} s: ${ships}`,
     });
+  }
+
+  /** Ultra Instinct recharges for minutes: say when it is ready again. */
+  private checkUltraInstinct(): void {
+    const { state } = this.session;
+    const player = findPlayer(state.players, this.session.playerId);
+    const recharging =
+      player !== undefined &&
+      !isUltraInstinctActive(state, player) &&
+      state.tick < player.ultraInstinctReadyTick;
+    if (this.ultraRecharging && !recharging && state.status === 'running') {
+      this.bus.emit('alert', { kind: 'info', text: 'Ultra Instinct is charged: press I or the orb' });
+    }
+    this.ultraRecharging = recharging;
   }
 
   private onEvent(event: GameEvent): void {
