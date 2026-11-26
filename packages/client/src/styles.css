@@ -979,6 +979,8 @@ kbd {
 
   position: relative;
   min-height: 0;
+  /* the orb's light reaches past the window's edge: cut it there, so the page does not scroll sideways */
+  overflow: clip;
 }
 
 .canvas-host {
@@ -2627,11 +2629,99 @@ kbd {
   text-shadow: none;
 }
 
+/* the burnout right after it: a smouldering ember that sputters, its red ring draining */
+.ultra-orb.burnout {
+  animation: ultra-sputter 0.42s linear infinite;
+}
+
+@keyframes ultra-sputter {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  20% {
+    transform: translate(-1.5px, 1px);
+  }
+
+  40% {
+    transform: translate(1px, -1px);
+  }
+
+  60% {
+    transform: translate(-1px, 0);
+  }
+
+  80% {
+    transform: translate(1.5px, 1px);
+  }
+}
+
+.ultra-orb.burnout .ultra-halo {
+  background: radial-gradient(circle, rgb(255 90 50 / 45%) 0%, rgb(160 30 20 / 22%) 40%, transparent 68%);
+  animation: ultra-smoulder 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes ultra-smoulder {
+  from {
+    opacity: 0.35;
+  }
+
+  to {
+    opacity: 0.85;
+  }
+}
+
+.ultra-orb.burnout .ultra-ring .track {
+  stroke: rgb(255 92 74 / 18%);
+}
+
+.ultra-orb.burnout .ultra-ring .progress {
+  stroke: #ff5c4a;
+  filter: drop-shadow(0 0 3px rgb(255 80 50 / 90%));
+}
+
+.ultra-orb.burnout .ultra-core {
+  background: radial-gradient(circle at 50% 40%, #ff8a4a 0%, #a3261c 30%, #4a0f10 65%, #150406 100%);
+  box-shadow:
+    inset 0 0 16px rgb(0 0 0 / 75%),
+    0 0 0 2px rgb(255 110 80 / 30%);
+  animation: ultra-ember 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes ultra-ember {
+  to {
+    filter: brightness(0.65) saturate(1.2);
+  }
+}
+
+.ultra-orb.burnout .ultra-readout {
+  text-shadow:
+    0 0 6px rgb(60 0 0 / 95%),
+    0 1px 2px rgb(0 0 0 / 80%);
+}
+
+.ultra-orb.burnout .ultra-readout b {
+  color: #ffe1d6;
+}
+
+.ultra-orb.burnout .ultra-readout small {
+  font-size: 0.75rem;
+  color: #ffb3a1;
+}
+
+.ultra-orb.burnout .ultra-label {
+  color: #ff8f7a;
+  text-shadow: 0 0 8px rgb(255 70 40 / 80%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ultra-halo,
   .ultra-swirl,
   .ultra-sparks,
-  .ultra-burst {
+  .ultra-burst,
+  .ultra-orb.burnout,
+  .ultra-orb.burnout .ultra-core {
     animation: none;
   }
 
@@ -2738,6 +2828,70 @@ kbd {
   transition: width 0.1s linear;
 }
 
+/* its burnout: the edges smoulder dark red, and the banner crashes in, red */
+.ultra-overlay.burnout .ultra-aura {
+  opacity: 1;
+  transition-duration: 0.15s;
+  box-shadow:
+    inset 0 0 70px rgb(255 60 30 / 42%),
+    inset 0 0 180px rgb(120 10 10 / 45%);
+  background: radial-gradient(ellipse at center, transparent 45%, rgb(30 0 0 / 35%) 100%);
+  animation: ultra-burnout-aura 0.7s ease-in-out infinite alternate;
+}
+
+@keyframes ultra-burnout-aura {
+  to {
+    box-shadow:
+      inset 0 0 50px rgb(255 60 30 / 28%),
+      inset 0 0 150px rgb(120 10 10 / 35%);
+  }
+}
+
+.ultra-banner.burnout {
+  background: linear-gradient(160deg, rgb(70 16 14 / 92%), rgb(22 6 8 / 94%));
+  border-color: rgb(255 110 80 / 65%);
+  box-shadow: 0 0 30px rgb(255 70 40 / 40%);
+  animation: ultra-banner-crash 0.4s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+
+@keyframes ultra-banner-crash {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-0.8rem) scale(1.1);
+  }
+}
+
+.ultra-banner.burnout .ultra-banner-title {
+  background: linear-gradient(90deg, #ffd0c2, #ff7a5c 55%, #d9382a);
+  background-clip: text;
+  filter: drop-shadow(0 0 10px rgb(255 80 50 / 70%));
+}
+
+.ultra-banner.burnout .ultra-banner-boost {
+  color: #ff8f7a;
+}
+
+.ultra-banner.burnout .ultra-banner-time {
+  color: #ffc2b3;
+}
+
+.ultra-banner-note {
+  grid-column: 1 / -1;
+  font-size: 0.78rem;
+  color: #ffb3a1;
+}
+
+.ultra-banner.burnout .ultra-banner-meter .fill {
+  background: linear-gradient(90deg, #ff3b2f, #ffb199);
+  box-shadow: 0 0 10px rgb(255 90 60 / 90%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ultra-overlay.burnout .ultra-aura {
+    animation: none;
+  }
+}
+
 /*
  * The YouTube player of the music: on screen while it plays, with its credit (YouTube asks for a player
  * of at least 200 × 200 pixels; 16:9 at 200 high). It cannot be clicked, so it cannot be paused by mistake.
@@ -2792,6 +2946,16 @@ kbd {
 
 .ultra-credit strong {
   color: #e3f1ff;
+}
+
+/* the burnout's music, in the same place: red */
+.ultra-music.burnout {
+  border-color: rgb(255 110 80 / 45%);
+  box-shadow: 0 0 24px rgb(255 70 40 / 30%);
+}
+
+.ultra-music.burnout .ultra-credit strong {
+  color: #ffc2b3;
 }
 
 /* Menu: the link to the credits */

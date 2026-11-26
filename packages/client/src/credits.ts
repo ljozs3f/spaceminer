@@ -1,6 +1,6 @@
 import { hasMusicFile, type Track } from './audio/MusicPlayer';
 import { BUILT_IN_TITLES } from './audio/songs';
-import { ULTRA_INSTINCT_TRACK } from './audio/UltraInstinctMusic';
+import { BURNOUT_TRACK, ULTRA_INSTINCT_TRACK } from './audio/YouTubeMusic';
 
 /** What the credits page shows (CreditsScreen.vue). */
 
@@ -74,10 +74,22 @@ export const CREDITS: readonly CreditSection[] = [
           { label: ULTRA_INSTINCT_TRACK.coverBy, url: ULTRA_INSTINCT_TRACK.coverByUrl },
         ],
       },
+      {
+        role: 'Music in the burnout after it',
+        title: BURNOUT_TRACK.title,
+        by: [
+          `Rock cover by ${BURNOUT_TRACK.coverBy}`,
+          `Original theme by ${BURNOUT_TRACK.original} (Dragon Ball Super)`,
+        ],
+        links: [
+          { label: 'YouTube', url: BURNOUT_TRACK.url },
+          { label: BURNOUT_TRACK.coverBy, url: BURNOUT_TRACK.coverByUrl },
+        ],
+      },
     ],
     note:
-      'Played from YouTube with its embedded player, with credit as the cover’s author asks. Space Miner is a ' +
-      'free, non-commercial project and earns nothing from it.',
+      'Played from YouTube with its embedded player, credited to their authors (as the Ultra Instinct ' +
+      'cover’s author asks). Space Miner is a free, non-commercial project and earns nothing from them.',
   },
   {
     heading: 'Soundtrack',

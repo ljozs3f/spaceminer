@@ -1,13 +1,26 @@
 /**
- * The music of Ultra Instinct: "Ultra Instinct Rush (HQ Cover)" by PokéMixr92 (original theme by Norihito
- * Sumitomo), played from YouTube with its official embedded player, so nothing is downloaded or hosted
- * here (the cover's author asks not to re-upload it). The player stays on screen while it plays, with the
- * credit beside it (UltraInstinctOverlay.vue), and the credits page names it too (src/credits.ts).
+ * The music of Ultra Instinct and of its burnout: covers of Dragon Ball Super themes, played from YouTube
+ * with its official embedded player, so nothing is downloaded or hosted here (the Ultra Instinct cover's
+ * author asks not to re-upload it). Each one plays its essence: the most replayed part of its video. The
+ * player stays on screen while it plays, with the credit beside it (UltraInstinctOverlay.vue), and the
+ * credits page names them too (src/credits.ts).
  *
- * The player is created when a game starts, paused, so that it is loaded by the time the button is pressed.
+ * The players are created when a game starts, paused, so that they are loaded by the time they play.
  * Without YouTube (offline, blocked) the game goes on without this music.
  */
 
+export interface YouTubeTrack {
+  readonly videoId: string;
+  readonly title: string;
+  readonly coverBy: string;
+  readonly coverByUrl: string;
+  readonly original: string;
+  readonly url: string;
+  /** Where its essence starts in the video (s). */
+  readonly startSeconds: number;
+}
+
+/** While Ultra Instinct is on. */
 export const ULTRA_INSTINCT_TRACK = {
   videoId: 'oGUGQRKygp4',
   title: 'Ultra Instinct Rush (HQ Cover)',
@@ -20,11 +33,23 @@ export const ULTRA_INSTINCT_TRACK = {
    * video peaks from 2:28 to 2:40), a second early so that its first beat lands with the aura.
    */
   startSeconds: 147,
-} as const;
+} as const satisfies YouTubeTrack;
 
-/** Seconds the music fades out over when Ultra Instinct ends. */
+/** In the burnout right after it: the theme of the one who beats you. */
+export const BURNOUT_TRACK = {
+  videoId: 'tNW9lmujZxU',
+  title: 'Jiren’s Tremendous Power (Epic Rock Cover)',
+  coverBy: 'Friedrich Habetler',
+  coverByUrl: 'https://www.youtube.com/@FriedrichHabetlerMusic',
+  original: 'Norihito Sumitomo',
+  url: 'https://www.youtube.com/watch?v=tNW9lmujZxU',
+  /** The essence: the video's "most replayed" graph is at its highest from 0:18 to 0:23, as long as the burnout. */
+  startSeconds: 18,
+} as const satisfies YouTubeTrack;
+
+/** Seconds the music fades out over when it stops, unless told otherwise. */
 const FADE_OUT_SECONDS = 1.2;
-/** The YouTube volume (0 to 100) at full music volume: the video is mastered louder than the soundtrack. */
+/** The YouTube volume (0 to 100) at full music volume: the videos are mastered louder than the soundtrack. */
 const FULL_VOLUME = 85;
 
 /** The parts of the YouTube IFrame Player API used here. */
@@ -86,7 +111,8 @@ function loadApi(): Promise<YouTubeApi> {
   return api;
 }
 
-export class UltraInstinctMusic {
+/** One track played from YouTube, from its essence. */
+export class YouTubeMusic {
   private player: YouTubePlayer | null = null;
   private wanted = false;
   private volume = 1;
@@ -99,6 +125,7 @@ export class UltraInstinctMusic {
    */
   constructor(
     host: HTMLElement,
+    private readonly track: YouTubeTrack,
     private readonly onPlaying: (playing: boolean) => void,
   ) {
     loadApi()
@@ -109,11 +136,11 @@ export class UltraInstinctMusic {
         host.append(target);
         // the player answers through these events; until onReady it cannot be used
         const player = new youtube.Player(target, {
-          videoId: ULTRA_INSTINCT_TRACK.videoId,
+          videoId: track.videoId,
           width: '100%',
           height: '100%',
           playerVars: {
-            start: ULTRA_INSTINCT_TRACK.startSeconds,
+            start: track.startSeconds,
             controls: 0,
             disablekb: 1,
             fs: 0,
@@ -132,26 +159,31 @@ export class UltraInstinctMusic {
               if (data !== BUFFERING) this.onPlaying(data === PLAYING);
             },
             onError: ({ data }) => {
-              console.warn(`The Ultra Instinct music cannot play (YouTube error ${String(data)})`);
+              console.warn(`"${track.title}" cannot play (YouTube error ${String(data)})`);
               this.onPlaying(false);
             },
           },
         });
       })
       .catch((error: unknown) => {
-        console.warn('The Ultra Instinct music is not available', error);
+        console.warn(`"${track.title}" is not available`, error);
       });
   }
 
-  /** Plays from the essence of the track, at `volume` (0 to 1, the game's music volume). */
+  /** The player is loaded: play() starts it at once. */
+  get ready(): boolean {
+    return this.player !== null;
+  }
+
+  /** Plays from its essence, at `volume` (0 to 1, the game's music volume). */
   play(volume: number): void {
     this.wanted = true;
     this.volume = volume;
     this.start();
   }
 
-  /** Fades out and pauses; the next play starts from the essence again. */
-  stop(): void {
+  /** Fades out (over fadeSeconds) and pauses; the next play starts from the essence again. */
+  stop(fadeSeconds = FADE_OUT_SECONDS): void {
     this.wanted = false;
     const player = this.player;
     if (!player) return;
@@ -165,9 +197,9 @@ export class UltraInstinctMusic {
         if (step < steps) return;
         window.clearInterval(this.fadeTimer);
         player.pauseVideo();
-        player.seekTo(ULTRA_INSTINCT_TRACK.startSeconds, true);
+        player.seekTo(this.track.startSeconds, true);
       },
-      (FADE_OUT_SECONDS * 1000) / steps,
+      (fadeSeconds * 1000) / steps,
     );
   }
 
@@ -200,7 +232,7 @@ export class UltraInstinctMusic {
     if (!player) return;
     window.clearInterval(this.fadeTimer);
     player.setVolume(this.youtubeVolume());
-    player.seekTo(ULTRA_INSTINCT_TRACK.startSeconds, true);
+    player.seekTo(this.track.startSeconds, true);
     player.playVideo();
   }
 

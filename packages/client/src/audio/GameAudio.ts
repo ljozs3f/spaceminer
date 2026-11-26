@@ -1,6 +1,7 @@
 import {
   findPlayer,
   isUltraInstinctActive,
+  isUltraInstinctBurnout,
   TICK_RATE,
   ticksUntilNextWave,
   type BuildingType,
@@ -51,8 +52,9 @@ export class GameAudio {
   private weldTurn = 0;
   /** The countdown second pinged last. */
   private lastCountdown = 0;
-  /** Whether Ultra Instinct was on in the last tick, to hear it end. */
+  /** Whether Ultra Instinct, and its burnout, were on in the last tick, to hear them end. */
   private ultraInstinct = false;
+  private burnout = false;
 
   constructor(
     private readonly audio: AudioEngine,
@@ -123,13 +125,17 @@ export class GameAudio {
     }
   }
 
-  /** The aura dies down when Ultra Instinct ends. */
+  /** The aura dies down and the buildings burn out when Ultra Instinct ends; the power comes back after. */
   private onUltraInstinct(): void {
     const { state, playerId } = this.session;
     const player = findPlayer(state.players, playerId);
     const active = player !== undefined && isUltraInstinctActive(state, player);
-    if (this.ultraInstinct && !active && state.status === 'running') this.audio.play('ultraInstinctEnd');
+    const burnout = player !== undefined && isUltraInstinctBurnout(state, player);
+    const running = state.status === 'running';
+    if (this.ultraInstinct && !active && running) this.audio.play('ultraInstinctEnd');
+    if (this.burnout && !burnout && running) this.audio.play('ultraInstinctRecover');
     this.ultraInstinct = active;
+    this.burnout = burnout;
   }
 
   /** A ping for each of the last seconds before a wave. */

@@ -45,5 +45,8 @@ Earlier picks, dropped: "Space Signal" by blemlin (loading) and "Galactic Arcade
 
 The Ultra Instinct music is not a file here: it plays from YouTube with the official embedded player
 ("Ultra Instinct Rush (HQ Cover)" by PokéMixr92, original theme by Norihito Sumitomo,
-https://www.youtube.com/watch?v=oGUGQRKygp4), see `src/audio/UltraInstinctMusic.ts`. The cover's author does
-not allow re-uploads, so it must not be downloaded into this folder.
+https://www.youtube.com/watch?v=oGUGQRKygp4), see `src/audio/YouTubeMusic.ts`. The cover's author does
+not allow re-uploads, so it must not be downloaded into this folder. The same goes for the music of the
+burnout after it ("Jiren's Tremendous Power (Epic Rock Cover)" by Friedrich Habetler, original theme by
+Norihito Sumitomo, https://www.youtube.com/watch?v=tNW9lmujZxU): his covers are claimed on YouTube wherever
+they are re-uploaded.

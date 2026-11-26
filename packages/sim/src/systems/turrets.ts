@@ -9,9 +9,9 @@ import { getEfficiencies } from './energy';
 /**
  * Lasers and missile launchers fire at the nearest pirate in range. Their reload speeds up with the owner's
  * energy efficiency, so an energy shortage lowers the fire rate proportionally, and many times over under
- * Ultra Instinct (then a turret may fire more than once in a tick). A turret with a salvo of more than one
- * (upgraded missile launchers) fires its projectiles in quick succession, each at the next nearest pirate,
- * then reloads.
+ * Ultra Instinct (then a turret may fire more than once in a tick), and slows down during its burnout. A
+ * turret with a salvo of more than one (upgraded missile launchers) fires its projectiles in quick
+ * succession, each at the next nearest pirate, then reloads.
  */
 export function updateTurrets(state: GameState, events: GameEvent[]): void {
   const efficiencies = getEfficiencies(state);

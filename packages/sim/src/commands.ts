@@ -131,6 +131,8 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
     case 'ultraInstinct':
       // on from this tick on: the systems of this tick already work boosted
       player.ultraInstinctUntilTick = state.tick + secondsToTicks(ULTRA_INSTINCT_CONFIG.durationSeconds);
+      player.ultraInstinctBurnoutUntilTick =
+        player.ultraInstinctUntilTick + secondsToTicks(ULTRA_INSTINCT_CONFIG.burnoutSeconds);
       player.ultraInstinctReadyTick =
         player.ultraInstinctUntilTick + secondsToTicks(ULTRA_INSTINCT_CONFIG.rechargeSeconds);
       break;

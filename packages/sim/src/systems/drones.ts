@@ -9,7 +9,8 @@ import { getEfficiencies } from './energy';
  * Repair hives keep their drones (one per level) and send them to the damaged buildings of their owner in
  * range: the most damaged first, spread over the damage. A drone repairs from a spot beside its building,
  * at a rate that follows the owner's energy efficiency, and flies home when nothing needs repair. Under
- * Ultra Instinct they fly and repair many times faster. Drones of a hive that is gone disappear with it.
+ * Ultra Instinct they fly and repair many times faster, and slower during its burnout. Drones of a hive that
+ * is gone disappear with it.
  */
 export function updateDrones(state: GameState): void {
   const hives = state.buildings.filter((building) => building.type === 'repair');

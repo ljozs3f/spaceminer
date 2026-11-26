@@ -47,6 +47,7 @@ export {
   findPlayer,
   isInBounds,
   isUltraInstinctActive,
+  isUltraInstinctBurnout,
   minedOreFraction,
   ticksUntilNextWave,
 } from './queries';

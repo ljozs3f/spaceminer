@@ -7,6 +7,7 @@ import {
   getBuildingEnergy,
   getBuildingStats,
   isUltraInstinctActive,
+  isUltraInstinctBurnout,
   nextBuildingLevel,
   ULTRA_INSTINCT_CONFIG,
   type Asteroid,
@@ -32,6 +33,7 @@ const COLORS = {
   danger: '#ff5c6c',
   mined: '#ffc861',
   ultra: '#bfe3ff',
+  burnout: '#ff5c4a',
   ui: '#40c4ff',
 } as const;
 
@@ -59,25 +61,35 @@ export function buildCardTip(type: BuildingType, key: number, ore: number): TipC
 }
 
 export function ultraInstinctTip(view: UltraInstinctView): TipContent {
-  const { multiplier, durationSeconds, rechargeSeconds } = ULTRA_INSTINCT_CONFIG;
+  const { multiplier, durationSeconds, burnoutDivisor, burnoutSeconds, rechargeSeconds } =
+    ULTRA_INSTINCT_CONFIG;
   let subtitle = 'Ready';
   if (view.active) subtitle = `On · ${String(view.secondsLeft)} s left`;
+  else if (view.burnout) subtitle = `Burnout · ${String(view.secondsLeft)} s left`;
   else if (!view.ready) subtitle = 'Recharging';
+  let warning: string | undefined;
+  if (view.burnout) {
+    warning = `Burnt out: everything works ${String(burnoutDivisor)} times worse for ${String(view.secondsLeft)} more s`;
+  } else if (!view.active && !view.ready) warning = `Ready again in ${clock(view.readyInSeconds)}`;
   return {
     title: 'Ultra Instinct',
     subtitle,
     text:
       `For ${String(durationSeconds)} seconds every building works ${String(multiplier)} times better: ` +
       'mines dig faster, solar panels make more energy, turrets fire faster, drones repair faster, and ' +
-      `the buildings take ${String(multiplier)} times less damage.`,
+      `the buildings take ${String(multiplier)} times less damage. The price: right after it they burn out, ` +
+      `and for ${String(burnoutSeconds)} seconds everything is ${String(burnoutDivisor)} times worse, ` +
+      `damage taken ${String(burnoutDivisor)} times more.`,
     stats: [
-      { label: 'Boost', value: `×${String(multiplier)}` },
-      { label: 'Lasts', value: `${String(durationSeconds)} s` },
+      { label: 'Boost', value: `×${String(multiplier)} for ${String(durationSeconds)} s`, tone: 'good' },
+      { label: 'Burnout', value: `÷${String(burnoutDivisor)} for ${String(burnoutSeconds)} s`, tone: 'bad' },
       { label: 'Recharge', value: clock(rechargeSeconds) },
     ],
-    ...(!view.active && !view.ready && { warning: `Ready again in ${clock(view.secondsLeft)}` }),
-    ...(view.ready && { hint: 'Press I or click it. Save it for the big waves.' }),
-    color: COLORS.ultra,
+    ...(warning && { warning }),
+    ...(view.ready && {
+      hint: 'Press I or click it. Not with pirates at the door: the burnout comes after.',
+    }),
+    color: view.burnout ? COLORS.burnout : COLORS.ultra,
   };
 }
 
@@ -192,6 +204,7 @@ function buildingTip(state: ReadonlyGameState, playerId: PlayerId, building: Bui
   const efficiency = player ? energyEfficiency(player) : 1;
   const usesEnergy = getBuildingEnergy(building.type, building.level).consumed > 0;
   const boosted = player !== undefined && isUltraInstinctActive(state, player);
+  const burntOut = player !== undefined && isUltraInstinctBurnout(state, player);
   const repairing = state.drones.some((drone) => drone.repairing && drone.targetId === building.id);
   const stats: TipStat[] = [
     {
@@ -211,12 +224,20 @@ function buildingTip(state: ReadonlyGameState, playerId: PlayerId, building: Bui
         ? 'Click it to sell it'
         : `Click it to upgrade (${String(getBuildingStats(building.type, next).cost)} ore) or sell it`;
   }
+  let mode = '';
+  if (boosted) mode = ' · Ultra Instinct';
+  else if (burntOut) mode = ' · Burnt out';
+  let warning: string | undefined;
+  if (burntOut) {
+    const divisor = String(ULTRA_INSTINCT_CONFIG.burnoutDivisor);
+    warning = `Burnt out: works ${divisor} times worse and takes ${divisor} times the damage`;
+  } else if (usesEnergy && efficiency < 1) warning = `Low power: works at ${percent(efficiency)}`;
   return {
     title: info.name,
-    subtitle: `Level ${String(building.level)} of ${String(MAX_LEVEL)}${boosted ? ' · Ultra Instinct' : ''}`,
+    subtitle: `Level ${String(building.level)} of ${String(MAX_LEVEL)}${mode}`,
     text: info.details,
     stats,
-    ...(usesEnergy && efficiency < 1 && { warning: `Low power: works at ${percent(efficiency)}` }),
+    ...(warning && { warning }),
     ...(hint && { hint }),
     color: cssColor(info.color),
   };

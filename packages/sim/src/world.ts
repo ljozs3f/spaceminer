@@ -40,6 +40,7 @@ export function createWorld(
       energyProduced: 0,
       energyConsumed: 0,
       ultraInstinctUntilTick: 0,
+      ultraInstinctBurnoutUntilTick: 0,
       ultraInstinctReadyTick: 0,
     })),
     asteroids: [],

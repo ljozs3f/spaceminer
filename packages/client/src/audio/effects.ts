@@ -37,6 +37,7 @@ export type SoundEffect =
   | 'warpOut'
   | 'ultraInstinct'
   | 'ultraInstinctEnd'
+  | 'ultraInstinctRecover'
   | 'won'
   | 'lost';
 
@@ -369,7 +370,8 @@ export const EFFECTS: Readonly<Record<SoundEffect, EffectDefinition>> = {
       return 2.5;
     },
   },
-  // the aura dies down: the air falls and a soft, low chord fades
+  // the aura dies and the buildings burn out: the air falls, a low chord fades, and the power winds down,
+  // sputtering, into a dull thud
   ultraInstinctEnd: {
     maxVoices: 1,
     minIntervalMs: 1000,
@@ -385,7 +387,37 @@ export const EFFECTS: Readonly<Record<SoundEffect, EffectDefinition>> = {
       });
       horn(ctx, out, t, [98, 146.8, 196], 1.4, 0.025, 1200);
       tone(ctx, out, t, { wave: 'sine', from: 220, to: 70, duration: 1, peak: 0.05 });
+      tone(ctx, out, t + 0.05, {
+        wave: 'sawtooth',
+        from: 340,
+        to: 38,
+        duration: 1.3,
+        peak: 0.05,
+        lowpass: 900,
+        tremolo: 13,
+      });
+      tone(ctx, out, t + 0.02, { wave: 'sine', from: 70, to: 30, duration: 0.5, peak: 0.2 });
+      noiseBurst(ctx, out, t + 0.02, { duration: 0.3, peak: 0.08, filter: 'lowpass', from: 900, to: 80 });
       return 1.5;
+    },
+  },
+  // the burnout is over: the power comes back on, two quick rising blips
+  ultraInstinctRecover: {
+    maxVoices: 1,
+    minIntervalMs: 1000,
+    play: (ctx, out, t) => {
+      tone(ctx, out, t, { wave: 'triangle', from: 150, to: 420, duration: 0.22, peak: 0.06 });
+      tone(ctx, out, t + 0.12, { wave: 'triangle', from: 260, to: 780, duration: 0.26, peak: 0.05 });
+      noiseBurst(ctx, out, t, {
+        duration: 0.4,
+        peak: 0.025,
+        filter: 'bandpass',
+        from: 400,
+        to: 3000,
+        q: 1.5,
+        attack: 0.15,
+      });
+      return 0.6;
     },
   },
   won: {
