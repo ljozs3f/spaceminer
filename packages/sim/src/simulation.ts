@@ -2,6 +2,7 @@ import { applyCommand, type Command, type CommandResult } from './commands';
 import type { LevelConfig } from './config/levels';
 import type { GameEvent } from './events';
 import { getGameMode } from './modes/registry';
+import { updateDrones } from './systems/drones';
 import { updateEnemies } from './systems/enemies';
 import { updateEnergy } from './systems/energy';
 import { updateMining } from './systems/mining';
@@ -38,6 +39,7 @@ export function step(state: GameState, commands: readonly Command[] = []): StepR
   updateMining(state, events);
   updateWaves(state, events);
   updateEnemies(state, events);
+  updateDrones(state);
   updateTurrets(state, events);
   updateProjectiles(state, events);
 

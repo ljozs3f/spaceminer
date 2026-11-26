@@ -34,11 +34,19 @@ export function createWorld(
     nextEntityId: 1,
     totalOre: 0,
     wave: { index: 0, nextWaveTick: secondsToTicks(level.waves.firstWaveSeconds) },
-    players: playerIds.map((id) => ({ id, ore: level.startingOre, energyProduced: 0, energyConsumed: 0 })),
+    players: playerIds.map((id) => ({
+      id,
+      ore: level.startingOre,
+      energyProduced: 0,
+      energyConsumed: 0,
+      ultraInstinctUntilTick: 0,
+      ultraInstinctReadyTick: 0,
+    })),
     asteroids: [],
     buildings: [],
     enemies: [],
     projectiles: [],
+    drones: [],
   };
 
   playerIds.forEach((playerId, index) => {

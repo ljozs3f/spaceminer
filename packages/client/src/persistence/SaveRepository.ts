@@ -1,4 +1,4 @@
-export const SAVE_SCHEMA_VERSION = 2;
+export const SAVE_SCHEMA_VERSION = 5;
 
 export interface AudioSettings {
   readonly muted: boolean;
@@ -8,14 +8,21 @@ export interface AudioSettings {
   readonly effectsVolume: number;
 }
 
-export const DEFAULT_AUDIO_SETTINGS: AudioSettings = { muted: false, musicVolume: 0.5, effectsVolume: 0.7 };
+export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
+  muted: false,
+  musicVolume: 0.5,
+  effectsVolume: 0.7,
+};
 
 export interface SaveData {
   readonly schemaVersion: typeof SAVE_SCHEMA_VERSION;
   /** Generated once per browser with crypto.randomUUID. */
   readonly playerId: string;
   readonly completedLevelIds: readonly string[];
-  /** Added in schema version 2. */
+  /**
+   * Added in schema version 2. Versions 3 and 4 also stored a soundtrack choice; the soundtrack is fixed
+   * since version 5.
+   */
   readonly audio: AudioSettings;
 }
 

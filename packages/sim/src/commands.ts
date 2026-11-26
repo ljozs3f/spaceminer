@@ -1,5 +1,6 @@
 import { addBuilding, getBuildingStats, getSellValue, nextBuildingLevel } from './buildings';
-import { findAsteroidAt, findAt, findById, findPlayer, isInBounds } from './queries';
+import { ULTRA_INSTINCT_CONFIG } from './config/ultraInstinct';
+import { findAsteroidAt, findAt, findById, findPlayer, isInBounds, isUltraInstinctActive } from './queries';
 import {
   BUILDING_TYPES,
   type BuildingType,
@@ -8,6 +9,7 @@ import {
   type PlayerId,
   type ReadonlyGameState,
 } from './types';
+import { secondsToTicks } from './units';
 
 export interface PlaceBuildingCommand {
   readonly type: 'placeBuilding';
@@ -29,8 +31,15 @@ export interface SellBuildingCommand {
   readonly buildingId: EntityId;
 }
 
+/** Every building of the player works many times better for a few seconds (ULTRA_INSTINCT_CONFIG). */
+export interface UltraInstinctCommand {
+  readonly type: 'ultraInstinct';
+  readonly playerId: PlayerId;
+}
+
 /** Every player action. Commands are the only way to change the state from outside the simulation. */
-export type Command = PlaceBuildingCommand | UpgradeBuildingCommand | SellBuildingCommand;
+export type Command =
+  PlaceBuildingCommand | UpgradeBuildingCommand | SellBuildingCommand | UltraInstinctCommand;
 
 export type RejectionReason =
   | 'gameOver'
@@ -43,7 +52,9 @@ export type RejectionReason =
   | 'buildingNotFound'
   | 'notOwner'
   | 'maxLevel'
-  | 'lastBuilding';
+  | 'lastBuilding'
+  | 'ultraInstinctActive'
+  | 'ultraInstinctRecharging';
 
 export type CommandResult =
   | { readonly ok: true; readonly command: Command }
@@ -82,6 +93,11 @@ export function validateCommand(state: ReadonlyGameState, command: Command): Rej
       if (owned === 1) return 'lastBuilding';
       return null;
     }
+    case 'ultraInstinct': {
+      if (isUltraInstinctActive(state, player)) return 'ultraInstinctActive';
+      if (state.tick < player.ultraInstinctReadyTick) return 'ultraInstinctRecharging';
+      return null;
+    }
   }
 }
 
@@ -112,6 +128,12 @@ export function applyCommand(state: GameState, command: Command): CommandResult 
       state.buildings = state.buildings.filter((candidate) => candidate !== building);
       break;
     }
+    case 'ultraInstinct':
+      // on from this tick on: the systems of this tick already work boosted
+      player.ultraInstinctUntilTick = state.tick + secondsToTicks(ULTRA_INSTINCT_CONFIG.durationSeconds);
+      player.ultraInstinctReadyTick =
+        player.ultraInstinctUntilTick + secondsToTicks(ULTRA_INSTINCT_CONFIG.rechargeSeconds);
+      break;
   }
   return { ok: true, command };
 }

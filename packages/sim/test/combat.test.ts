@@ -3,7 +3,7 @@ import { getBuildingStats } from '../src/buildings';
 import { ENEMY_CONFIG } from '../src/config/enemies';
 import { TICK_RATE } from '../src/config/simulation';
 import type { GameState } from '../src/types';
-import { addEnemy, buildingAt, createTestGame, getPlayer, place, runTicks } from './helpers';
+import { addEnemy, buildingAt, createTestGame, getPlayer, place, runTicks, upgrade } from './helpers';
 
 /** Runs until the turret's first projectile has landed. */
 function runUntilFirstImpact(state: GameState): void {
@@ -13,6 +13,21 @@ function runUntilFirstImpact(state: GameState): void {
     if (hadProjectile && state.projectiles.length === 0) return;
   }
   throw new Error('No projectile landed');
+}
+
+/** The targets of the projectiles fired in the next ticks, in the order they were fired. */
+function missileTargets(state: GameState, ticks: number): number[] {
+  const seen = new Set(state.projectiles.map((projectile) => projectile.id));
+  const targets: number[] = [];
+  for (let tick = 0; tick < ticks; tick++) {
+    runTicks(state, 1);
+    for (const projectile of state.projectiles) {
+      if (seen.has(projectile.id)) continue;
+      seen.add(projectile.id);
+      targets.push(projectile.targetId);
+    }
+  }
+  return targets;
 }
 
 /** Pirates that never attack, so the buildings survive and only the turrets deal damage. */
@@ -46,6 +61,38 @@ describe('combat', () => {
     expect(target.hp).toBe(1000 - missile.damage);
     expect(near.hp).toBe(1000 - missile.damage);
     expect(far.hp).toBe(1000);
+  });
+
+  it.each([1, 2, 3] as const)(
+    'a level %i missile launcher fires that many missiles per salvo, spread over the nearest pirates',
+    (level) => {
+      const state = createTestGame();
+      place(state, 'missile', 5, 5);
+      const launcher = buildingAt(state, 5, 5);
+      for (let current = 1; current < level; current++) upgrade(state, launcher.id);
+      const stats = getBuildingStats('missile', level);
+      const pirates = [7, 8, 9].map((y) => addEnemy(state, 5.5, y + 0.5));
+      disarm(state);
+
+      // a salvo is over well within a second; the next one comes after the reload
+      expect(stats.salvo).toBe(level);
+      expect(missileTargets(state, TICK_RATE)).toEqual(pirates.slice(0, level).map((pirate) => pirate.id));
+      expect(launcher.salvoLeft).toBe(0);
+      expect(missileTargets(state, Math.ceil(TICK_RATE / stats.shotsPerSecond) - TICK_RATE - 1)).toEqual([]);
+      expect(missileTargets(state, 2)).toHaveLength(1);
+    },
+  );
+
+  it('a salvo with fewer pirates than missiles sends the rest to the nearest one', () => {
+    const state = createTestGame();
+    place(state, 'missile', 5, 5);
+    const launcher = buildingAt(state, 5, 5);
+    upgrade(state, launcher.id);
+    upgrade(state, launcher.id);
+    const pirate = addEnemy(state, 5.5, 8.5);
+    disarm(state);
+
+    expect(missileTargets(state, TICK_RATE)).toEqual([pirate.id, pirate.id, pirate.id]);
   });
 
   it('removes destroyed pirates and pays their bounty to the owner of the turret', () => {

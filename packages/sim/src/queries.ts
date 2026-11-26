@@ -1,5 +1,6 @@
 import { ASTEROID_CONFIG } from './config/asteroids';
 import type { LevelConfig } from './config/levels';
+import { ULTRA_INSTINCT_CONFIG } from './config/ultraInstinct';
 import { DISTANCE_EPSILON, distance } from './units';
 import type { AsteroidSize, EntityId, PlayerId, PlayerState, ReadonlyDeep, ReadonlyGameState } from './types';
 
@@ -74,6 +75,26 @@ export function minedOreFraction(state: ReadonlyGameState): number {
 export function energyEfficiency(player: ReadonlyDeep<PlayerState>): number {
   if (player.energyConsumed === 0) return 1;
   return Math.min(1, player.energyProduced / player.energyConsumed);
+}
+
+/** Whether the player's Ultra Instinct is on in the current tick. */
+export function isUltraInstinctActive(
+  state: { readonly tick: number },
+  player: { readonly ultraInstinctUntilTick: number },
+): boolean {
+  return state.tick < player.ultraInstinctUntilTick;
+}
+
+/**
+ * How many times better the player's buildings work in the current tick: the Ultra Instinct multiplier
+ * while it is on, otherwise 1.
+ */
+export function boostOf(
+  state: { readonly tick: number; readonly players: readonly ReadonlyDeep<PlayerState>[] },
+  playerId: PlayerId,
+): number {
+  const player = findPlayer(state.players, playerId);
+  return player && isUltraInstinctActive(state, player) ? ULTRA_INSTINCT_CONFIG.multiplier : 1;
 }
 
 export function ticksUntilNextWave(state: ReadonlyGameState): number {

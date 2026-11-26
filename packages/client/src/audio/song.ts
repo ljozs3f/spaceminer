@@ -16,6 +16,11 @@ export interface SongSection {
   readonly drums: boolean;
   /** Chance of a bell on each beat. */
   readonly bells: number;
+  /**
+   * A filter sweep over the section: the bassline's and the arpeggio's brightness goes from the first factor
+   * to the second (1: as the song sets it). Opening up builds tension, closing calms down.
+   */
+  readonly sweep?: readonly [from: number, to: number];
 }
 
 export interface Song {
@@ -43,6 +48,12 @@ export interface SongSound {
     /** Depth of the vibrato in cents. */
     readonly vibrato: number;
     readonly level: number;
+    /** Seconds a note slides from the one before when they are played legato (portamento). */
+    readonly glide?: number;
+    /** Octaves every note is doubled at, in semitones (e.g. [0, -12]: a horn section). Default [0]. */
+    readonly octaves?: readonly number[];
+    /** Seconds the filter takes to open at the start of a note, like a brass instrument (0: open at once). */
+    readonly bloom?: number;
   };
   readonly arp: {
     readonly wave: OscillatorType;
@@ -52,9 +63,11 @@ export interface SongSound {
     readonly filterFrom: number;
     readonly filterTo: number;
     readonly resonance: number;
-    /** MIDI note around which the arpeggio plays. */
+    /** MIDI note around which the arpeggio plays (a C: 48, 60, 72). */
     readonly register: number;
     readonly level: number;
+    /** Cents between two detuned voices, for width (0: one voice). */
+    readonly detune?: number;
   };
   readonly pad: {
     /** Vowel formants (Hz) for a choir-like pad; empty for a plain synth pad. */
@@ -66,9 +79,27 @@ export interface SongSound {
   };
   /** Level of the long bass note under each bar. */
   readonly bass: number;
+  /**
+   * A plucked bassline in the calm music, on these steps of the bar (interval above the root): what keeps a
+   * driving song moving when no battle is on.
+   */
+  readonly pulse?: {
+    readonly steps: readonly (readonly [step: number, interval: number])[];
+    readonly cutoff: number;
+    /** Seconds each note rings. */
+    readonly decay: number;
+    readonly level: number;
+  };
+  /** Sidechain pumping: how deep the pad and the arpeggio duck on every beat of a section with drums (0 to 1). */
+  readonly pump?: number;
+  /** Level of the noise sweep rising into the next section (0: none). */
+  readonly riser?: number;
   readonly bells: number;
-  /** 'kit': kick, snare and hi-hats; 'cinematic': deep kicks, toms, a big snare and a shaker. */
-  readonly drums: 'kit' | 'cinematic';
+  /**
+   * 'kit': kick, snare and hi-hats; 'cinematic': deep kicks, toms, a big snare and a shaker; 'drive': a
+   * four-on-the-floor kick, off-beat hats and claps, a snare roll into each section.
+   */
+  readonly drums: 'kit' | 'cinematic' | 'drive';
   readonly drumLevel: number;
   /** The driving bass of the battle layer: steps of the bar it plays on, and the interval above the root. */
   readonly groove: {

@@ -1,6 +1,12 @@
+import type { RenderedSound } from './rendered';
+import { playRendered } from './soundBank';
+
 /**
- * Sound effects synthesized with the Web Audio API: no files, and every play varies a little, so repeated
- * shots and explosions do not sound copy-pasted.
+ * The sound effects. Weapons, explosions, the wave alarm and the warp jumps are rendered sample by sample
+ * (rendered.ts, played from soundBank.ts); the rest is synthesized with the Web Audio API on every play,
+ * built like foley rather than like arcade beeps: layers of filtered noise for the physical part, a short low
+ * thump for the weight, and only a little pitched tone. Everything goes through a short space reverb
+ * (AudioEngine).
  */
 
 export type SoundEffect =
@@ -15,13 +21,22 @@ export type SoundEffect =
   | 'placeSolar'
   | 'placeLaser'
   | 'placeMissile'
+  | 'placeRepair'
+  | 'droneLaunch'
+  | 'repairWeld'
   | 'upgrade'
   | 'sell'
   | 'error'
   | 'pirateShot'
+  | 'pirateCannon'
   | 'notify'
   | 'warning'
-  | 'waveWarning'
+  | 'countdown'
+  | 'waveAlarm'
+  | 'warpIn'
+  | 'warpOut'
+  | 'ultraInstinct'
+  | 'ultraInstinctEnd'
   | 'won'
   | 'lost';
 
@@ -35,318 +50,456 @@ interface EffectDefinition {
 }
 
 export const EFFECTS: Readonly<Record<SoundEffect, EffectDefinition>> = {
-  laser: {
-    maxVoices: 6,
-    minIntervalMs: 45,
-    play: (ctx, out, t) => {
-      const pitch = vary(0.12);
-      tone(ctx, out, t, {
-        wave: 'square',
-        from: 1700 * pitch,
-        to: 380 * pitch,
-        duration: 0.09,
-        peak: 0.07,
-        lowpass: 5000,
-      });
-      return 0.09;
-    },
-  },
-  missileLaunch: {
-    maxVoices: 4,
-    minIntervalMs: 80,
-    play: (ctx, out, t) => {
-      noiseBurst(ctx, out, t, {
-        duration: 0.45,
-        peak: 0.22,
-        filter: 'bandpass',
-        from: 500,
-        to: 2600 * vary(0.2),
-        q: 2,
-      });
-      tone(ctx, out, t, { wave: 'sine', from: 160, to: 55, duration: 0.25, peak: 0.25 });
-      return 0.45;
-    },
-  },
-  missileImpact: { maxVoices: 4, minIntervalMs: 60, play: (ctx, out, t) => explosion(ctx, out, t, 0.6) },
-  explosionSmall: { maxVoices: 5, minIntervalMs: 40, play: (ctx, out, t) => explosion(ctx, out, t, 0.5) },
-  explosionMedium: { maxVoices: 4, minIntervalMs: 60, play: (ctx, out, t) => explosion(ctx, out, t, 0.85) },
-  explosionLarge: { maxVoices: 3, minIntervalMs: 100, play: (ctx, out, t) => explosion(ctx, out, t, 1.3) },
-  buildingDestroyed: {
-    maxVoices: 3,
-    minIntervalMs: 120,
-    play: (ctx, out, t) => {
-      const length = explosion(ctx, out, t, 1.6);
-      // falling metal debris
-      for (let i = 0; i < 7; i++) {
-        noiseBurst(ctx, out, t + 0.08 + Math.random() * 0.7, {
-          duration: 0.05 + Math.random() * 0.06,
-          peak: 0.08,
-          filter: 'highpass',
-          from: 2500 + Math.random() * 3000,
-          to: 1500,
-        });
-      }
-      // the power going down
-      tone(ctx, out, t + 0.05, {
-        wave: 'sawtooth',
-        from: 320,
-        to: 40,
-        duration: 0.9,
-        peak: 0.07,
-        lowpass: 900,
-      });
-      return Math.max(length, 0.95);
-    },
-  },
-  // starting up a new building: every type has its own
+  // an energy weapon: an electrical crack, a buzzing discharge sweeping down, a thump, ionized air
+  laser: { maxVoices: 6, minIntervalMs: 45, play: rendered('laser') },
+  // the ejection pop, then a fizzing motor roar that darkens and drops as the missile flies off
+  missileLaunch: { maxVoices: 5, minIntervalMs: 60, play: rendered('missileLaunch') },
+  // explosions: crack, boom, sub, rolling rumble, crackling debris, shrapnel, secondary blasts
+  missileImpact: { maxVoices: 4, minIntervalMs: 60, play: rendered('missileImpact') },
+  explosionSmall: { maxVoices: 5, minIntervalMs: 40, play: rendered('explosionSmall') },
+  explosionMedium: { maxVoices: 4, minIntervalMs: 60, play: rendered('explosionMedium') },
+  explosionLarge: { maxVoices: 3, minIntervalMs: 100, play: rendered('explosionLarge') },
+  // a big blast, the steel groaning and creaking, then the collapse
+  buildingDestroyed: { maxVoices: 3, minIntervalMs: 120, play: rendered('buildingDestroyed') },
+  // building something: a heavy set-down, then what the building does when it starts
   placeMine: {
     maxVoices: 2,
     minIntervalMs: 80,
     play: (ctx, out, t) => {
-      noiseBurst(ctx, out, t, { duration: 0.14, peak: 0.25, filter: 'lowpass', from: 700, to: 120 });
-      tone(ctx, out, t + 0.05, {
-        wave: 'sawtooth',
-        from: 60,
-        to: 190,
+      setDown(ctx, out, t, 0.9);
+      // the drills spinning up
+      noiseBurst(ctx, out, t + 0.15, {
         duration: 0.7,
-        peak: 0.08,
-        attack: 0.15,
-        lowpass: 900,
-        tremolo: 18,
+        peak: 0.05,
+        filter: 'bandpass',
+        from: 300,
+        to: 900,
+        q: 3,
+        attack: 0.25,
+        tremolo: 24,
       });
-      tone(ctx, out, t + 0.7, { wave: 'triangle', from: 1320, to: 1320, duration: 0.3, peak: 0.06 });
-      return 1;
+      tone(ctx, out, t + 0.15, {
+        wave: 'sawtooth',
+        from: 45,
+        to: 110,
+        duration: 0.7,
+        peak: 0.035,
+        attack: 0.3,
+        lowpass: 500,
+        tremolo: 24,
+      });
+      return 0.9;
     },
   },
   placeSolar: {
     maxVoices: 2,
     minIntervalMs: 80,
     play: (ctx, out, t) => {
-      [1318.5, 1661.2, 1975.5, 2637].forEach((frequency, i) => {
-        tone(ctx, out, t + i * 0.07, {
-          wave: 'sine',
-          from: frequency,
-          to: frequency,
-          duration: 0.4,
-          peak: 0.05,
+      setDown(ctx, out, t, 0.6);
+      // the panels unfolding with a soft swish each, then a quiet hum of power
+      for (const at of [0.12, 0.22, 0.32]) {
+        noiseBurst(ctx, out, t + at, {
+          duration: 0.09,
+          peak: 0.035,
+          filter: 'bandpass',
+          from: 1800,
+          to: 3500,
+          q: 2,
+          attack: 0.03,
         });
-      });
-      noiseBurst(ctx, out, t, {
-        duration: 0.7,
-        peak: 0.035,
-        filter: 'highpass',
-        from: 5000,
-        to: 8000,
-        attack: 0.3,
-      });
-      for (const frequency of [329.6, 494]) {
-        tone(ctx, out, t, {
-          wave: 'sine',
-          from: frequency,
-          to: frequency,
-          duration: 0.9,
-          peak: 0.05,
-          attack: 0.3,
-        });
+        metal(ctx, out, t + at + 0.08, 900, 0.012);
       }
-      return 0.95;
+      tone(ctx, out, t + 0.35, {
+        wave: 'sawtooth',
+        from: 98,
+        to: 98,
+        duration: 0.7,
+        peak: 0.025,
+        attack: 0.2,
+        lowpass: 420,
+      });
+      return 1.05;
     },
   },
   placeLaser: {
     maxVoices: 2,
     minIntervalMs: 80,
     play: (ctx, out, t) => {
-      tone(ctx, out, t, {
-        wave: 'sawtooth',
-        from: 220,
-        to: 1760,
-        duration: 0.55,
-        peak: 0.05,
-        attack: 0.4,
-        lowpass: 3000,
+      setDown(ctx, out, t, 0.7);
+      // the turret turning on its servo, the capacitors charging up, the lock
+      noiseBurst(ctx, out, t + 0.1, {
+        duration: 0.3,
+        peak: 0.04,
+        filter: 'bandpass',
+        from: 700,
+        to: 1400,
+        q: 8,
+        attack: 0.05,
       });
-      tone(ctx, out, t + 0.55, { wave: 'square', from: 2400, to: 2400, duration: 0.03, peak: 0.05 });
-      tone(ctx, out, t + 0.6, {
-        wave: 'square',
-        from: 1800,
-        to: 600,
-        duration: 0.11,
-        peak: 0.05,
-        lowpass: 5000,
+      noiseBurst(ctx, out, t + 0.25, {
+        duration: 0.35,
+        peak: 0.035,
+        filter: 'bandpass',
+        from: 1500,
+        to: 6000,
+        q: 4,
+        attack: 0.3,
       });
-      return 0.75;
+      metal(ctx, out, t + 0.6, 1100, 0.03);
+      return 0.85;
     },
   },
   placeMissile: {
     maxVoices: 2,
     minIntervalMs: 80,
     play: (ctx, out, t) => {
-      noiseBurst(ctx, out, t, { duration: 0.5, peak: 0.12, filter: 'bandpass', from: 3000, to: 800, q: 1.5 });
-      for (const at of [0.05, 0.45]) {
-        noiseBurst(ctx, out, t + at, { duration: 0.12, peak: 0.2, filter: 'lowpass', from: 450, to: 80 });
-        tone(ctx, out, t + at, { wave: 'sine', from: 95, to: 50, duration: 0.18, peak: 0.25 });
+      setDown(ctx, out, t, 1);
+      // two heavy clamps and the hiss of hydraulics
+      for (const at of [0.2, 0.5]) {
+        metal(ctx, out, t + at, 300, 0.03);
+        noiseBurst(ctx, out, t + at, { duration: 0.08, peak: 0.1, filter: 'lowpass', from: 500, to: 90 });
       }
-      tone(ctx, out, t + 0.15, {
-        wave: 'square',
-        from: 180,
-        to: 260,
+      noiseBurst(ctx, out, t + 0.25, {
         duration: 0.35,
-        peak: 0.035,
-        lowpass: 1200,
+        peak: 0.045,
+        filter: 'highpass',
+        from: 3500,
+        to: 6000,
+        attack: 0.03,
       });
-      return 0.65;
+      return 0.8;
     },
   },
+  placeRepair: {
+    maxVoices: 2,
+    minIntervalMs: 80,
+    play: (ctx, out, t) => {
+      setDown(ctx, out, t, 0.7);
+      // the bay doors, then the drones' rotors spinning up
+      noiseBurst(ctx, out, t + 0.12, {
+        duration: 0.2,
+        peak: 0.04,
+        filter: 'highpass',
+        from: 3000,
+        to: 4500,
+        attack: 0.02,
+      });
+      rotor(ctx, out, t + 0.3, 0.6, 0.04);
+      return 0.95;
+    },
+  },
+  // a drone lifting off its hive: a short rotor whirr
+  droneLaunch: {
+    maxVoices: 3,
+    minIntervalMs: 120,
+    play: (ctx, out, t) => {
+      rotor(ctx, out, t, 0.35, 0.025);
+      return 0.4;
+    },
+  },
+  // the drones at work: a few welding crackles and a faint electric buzz
+  repairWeld: {
+    maxVoices: 2,
+    minIntervalMs: 250,
+    play: (ctx, out, t) => {
+      for (let i = 0; i < 6; i++) {
+        noiseBurst(ctx, out, t + Math.random() * 0.3, {
+          duration: 0.006 + Math.random() * 0.01,
+          peak: 0.025 + Math.random() * 0.02,
+          filter: 'highpass',
+          from: 3500 + Math.random() * 3000,
+          to: 3000,
+        });
+      }
+      tone(ctx, out, t, {
+        wave: 'sawtooth',
+        from: 118,
+        to: 122,
+        duration: 0.3,
+        peak: 0.01,
+        attack: 0.05,
+        lowpass: 1600,
+        tremolo: 50,
+      });
+      return 0.35;
+    },
+  },
+  // more power: air rushing in, a low swell, then the new parts locking in place
   upgrade: {
     maxVoices: 2,
     minIntervalMs: 50,
     play: (ctx, out, t) => {
-      [440, 554.4, 659.3, 880, 1108.7].forEach((frequency, i) => {
-        tone(ctx, out, t + i * 0.06, {
-          wave: 'triangle',
-          from: frequency,
-          to: frequency,
-          duration: 0.25,
-          peak: 0.11,
-        });
+      noiseBurst(ctx, out, t, {
+        duration: 0.45,
+        peak: 0.06,
+        filter: 'bandpass',
+        from: 300,
+        to: 5000,
+        q: 2,
+        attack: 0.35,
       });
-      noiseBurst(ctx, out, t + 0.1, {
-        duration: 0.5,
-        peak: 0.03,
-        filter: 'highpass',
-        from: 6000,
-        to: 9000,
-        attack: 0.2,
-      });
-      tone(ctx, out, t, { wave: 'sine', from: 110, to: 220, duration: 0.4, peak: 0.12 });
-      return 0.6;
+      tone(ctx, out, t, { wave: 'sine', from: 55, to: 110, duration: 0.5, peak: 0.1, attack: 0.3 });
+      setDown(ctx, out, t + 0.42, 0.8);
+      metal(ctx, out, t + 0.46, 700, 0.03);
+      metal(ctx, out, t + 0.56, 1000, 0.02);
+      return 1;
     },
   },
+  // the building taken apart: a falling whoosh and a soft thud
   sell: {
     maxVoices: 2,
     minIntervalMs: 50,
     play: (ctx, out, t) => {
-      tone(ctx, out, t, { wave: 'triangle', from: 659.3, to: 659.3, duration: 0.09, peak: 0.12 });
-      tone(ctx, out, t + 0.09, { wave: 'triangle', from: 440, to: 440, duration: 0.16, peak: 0.12 });
-      noiseBurst(ctx, out, t, { duration: 0.2, peak: 0.03, filter: 'highpass', from: 6000, to: 8000 });
-      return 0.25;
+      noiseBurst(ctx, out, t, {
+        duration: 0.35,
+        peak: 0.05,
+        filter: 'bandpass',
+        from: 4500,
+        to: 400,
+        q: 2,
+      });
+      metal(ctx, out, t + 0.05, 600, 0.02);
+      tone(ctx, out, t + 0.25, { wave: 'sine', from: 110, to: 60, duration: 0.15, peak: 0.08 });
+      return 0.42;
     },
   },
+  // a muted double knock, not a buzzer
   error: {
     maxVoices: 1,
     minIntervalMs: 150,
     play: (ctx, out, t) => {
-      tone(ctx, out, t, { wave: 'square', from: 150, to: 130, duration: 0.15, peak: 0.08, lowpass: 1200 });
-      return 0.15;
+      for (const at of [0, 0.09]) {
+        tone(ctx, out, t + at, { wave: 'sine', from: 180, to: 120, duration: 0.07, peak: 0.09 });
+        noiseBurst(ctx, out, t + at, {
+          duration: 0.025,
+          peak: 0.035,
+          filter: 'lowpass',
+          from: 1200,
+          to: 500,
+        });
+      }
+      return 0.18;
     },
   },
-  pirateShot: {
-    maxVoices: 5,
-    minIntervalMs: 60,
-    play: (ctx, out, t) => {
-      const pitch = vary(0.15);
-      tone(ctx, out, t, {
-        wave: 'sawtooth',
-        from: 950 * pitch,
-        to: 240 * pitch,
-        duration: 0.12,
-        peak: 0.045,
-        lowpass: 2200,
-      });
-      return 0.12;
-    },
-  },
-  // discreet: a wave on its way
+  // pirate guns: a dirtier, lower discharge with a growl; the dreadnought's cannon is the same, much lower
+  pirateShot: { maxVoices: 5, minIntervalMs: 60, play: rendered('pirateShot') },
+  pirateCannon: { maxVoices: 3, minIntervalMs: 120, play: rendered('pirateShot', 0.68) },
+  // discreet: a wave on its way; two short, soft radio blips
   notify: {
     maxVoices: 1,
     minIntervalMs: 500,
     play: (ctx, out, t) => {
-      tone(ctx, out, t, { wave: 'sine', from: 880, to: 880, duration: 0.25, peak: 0.06, attack: 0.02 });
-      tone(ctx, out, t + 0.13, {
-        wave: 'sine',
-        from: 1318.5,
-        to: 1318.5,
-        duration: 0.4,
-        peak: 0.05,
-        attack: 0.02,
-      });
-      return 0.55;
+      for (const at of [0, 0.11]) {
+        tone(ctx, out, t + at, {
+          wave: 'triangle',
+          from: 1046.5,
+          to: 1046.5,
+          duration: 0.07,
+          peak: 0.03,
+          lowpass: 2200,
+        });
+      }
+      noiseBurst(ctx, out, t, { duration: 0.2, peak: 0.008, filter: 'bandpass', from: 2500, to: 2500, q: 2 });
+      return 0.3;
     },
   },
-  // something needs attention: low energy, an attack
+  // something needs attention: low energy, an attack; two low, filtered pulses
   warning: {
     maxVoices: 1,
     minIntervalMs: 500,
     play: (ctx, out, t) => {
-      tone(ctx, out, t, { wave: 'triangle', from: 523.3, to: 523.3, duration: 0.16, peak: 0.08 });
-      tone(ctx, out, t + 0.18, { wave: 'triangle', from: 392, to: 392, duration: 0.25, peak: 0.08 });
-      return 0.45;
+      for (const at of [0, 0.2]) {
+        tone(ctx, out, t + at, {
+          wave: 'sawtooth',
+          from: 233,
+          to: 220,
+          duration: 0.16,
+          peak: 0.06,
+          attack: 0.01,
+          lowpass: 800,
+        });
+        tone(ctx, out, t + at, { wave: 'sine', from: 116.5, to: 110, duration: 0.16, peak: 0.07 });
+      }
+      return 0.4;
     },
   },
-  waveWarning: {
+  // the last seconds before a wave: a sonar ping
+  countdown: {
+    maxVoices: 1,
+    minIntervalMs: 400,
+    play: (ctx, out, t) => {
+      tone(ctx, out, t, { wave: 'sine', from: 1318.5, to: 1318.5, duration: 0.35, peak: 0.05 });
+      tone(ctx, out, t, { wave: 'sine', from: 2637, to: 2637, duration: 0.12, peak: 0.012 });
+      return 0.4;
+    },
+  },
+  // battle stations: a cinematic impact under a two-tone klaxon
+  waveAlarm: { maxVoices: 1, minIntervalMs: 1000, play: rendered('waveAlarm') },
+  // the intro and the sector loading: spooling up for the jump, and dropping out of it
+  warpIn: { maxVoices: 1, minIntervalMs: 500, play: rendered('warpIn') },
+  warpOut: { maxVoices: 1, minIntervalMs: 500, play: rendered('warpOut') },
+  // Ultra Instinct: the aura flares up. A deep drop, a rush of air rising, a bright, wide chord blooming and
+  // glassy overtones shimmering above it
+  ultraInstinct: {
     maxVoices: 1,
     minIntervalMs: 1000,
     play: (ctx, out, t) => {
-      for (let i = 0; i < 6; i++) {
-        const frequency = i % 2 === 0 ? 520 : 390;
-        tone(ctx, out, t + i * 0.18, {
-          wave: 'sawtooth',
+      tone(ctx, out, t, { wave: 'sine', from: 96, to: 34, duration: 1.5, peak: 0.24 });
+      noiseBurst(ctx, out, t, { duration: 0.35, peak: 0.12, filter: 'lowpass', from: 2400, to: 120 });
+      noiseBurst(ctx, out, t, {
+        duration: 1.8,
+        peak: 0.06,
+        filter: 'bandpass',
+        from: 350,
+        to: 7000,
+        q: 1.4,
+        attack: 0.6,
+      });
+      horn(ctx, out, t + 0.04, [98, 146.8, 196, 293.7, 392, 587.3], 2.4, 0.03, 3400);
+      [1568, 2349.3, 3136, 4698.6].forEach((frequency, index) => {
+        tone(ctx, out, t + 0.3 + index * 0.11, {
+          wave: 'sine',
           from: frequency,
-          to: frequency,
-          duration: 0.17,
-          peak: 0.06,
-          lowpass: 2200,
+          to: frequency * 1.01,
+          duration: 1.4,
+          peak: 0.011,
+          attack: 0.08,
         });
-      }
-      return 1.1;
+      });
+      return 2.5;
+    },
+  },
+  // the aura dies down: the air falls and a soft, low chord fades
+  ultraInstinctEnd: {
+    maxVoices: 1,
+    minIntervalMs: 1000,
+    play: (ctx, out, t) => {
+      noiseBurst(ctx, out, t, {
+        duration: 1.2,
+        peak: 0.04,
+        filter: 'bandpass',
+        from: 5000,
+        to: 300,
+        q: 1.2,
+        attack: 0.05,
+      });
+      horn(ctx, out, t, [98, 146.8, 196], 1.4, 0.025, 1200);
+      tone(ctx, out, t, { wave: 'sine', from: 220, to: 70, duration: 1, peak: 0.05 });
+      return 1.5;
     },
   },
   won: {
     maxVoices: 1,
     minIntervalMs: 1000,
     play: (ctx, out, t) => {
-      for (const frequency of [261.6, 329.6, 392, 523.3]) {
-        tone(ctx, out, t, {
-          wave: 'sine',
-          from: frequency,
-          to: frequency,
-          duration: 3,
-          peak: 0.07,
-          attack: 0.5,
-        });
-      }
-      return 3;
+      // a wide major-ninth chord blooming, with a soft rising shimmer
+      horn(ctx, out, t, [146.8, 220, 293.7, 370, 440, 659.3], 3.2, 0.035, 2600);
+      noiseBurst(ctx, out, t, {
+        duration: 2.5,
+        peak: 0.025,
+        filter: 'bandpass',
+        from: 2000,
+        to: 8000,
+        q: 3,
+        attack: 1.2,
+      });
+      return 3.3;
     },
   },
   lost: {
     maxVoices: 1,
     minIntervalMs: 1000,
     play: (ctx, out, t) => {
-      tone(ctx, out, t, { wave: 'sawtooth', from: 392, to: 98, duration: 1.8, peak: 0.08, lowpass: 800 });
-      noiseBurst(ctx, out, t, { duration: 2, peak: 0.1, filter: 'lowpass', from: 400, to: 60 });
-      return 2;
+      horn(ctx, out, t, [73.4, 87.3, 110], 2.4, 0.06, 700);
+      groan(ctx, out, t, 2, 0.04);
+      noiseBurst(ctx, out, t, { duration: 2.2, peak: 0.08, filter: 'lowpass', from: 500, to: 50 });
+      return 2.4;
     },
   },
 };
 
-/** A boom whose size (about 0.5 to 1.6) sets its length, depth and loudness. */
-function explosion(ctx: AudioContext, out: AudioNode, t: number, size: number): number {
-  const duration = (0.3 + 0.55 * size) * vary(0.15);
+/** Plays a rendered sound (soundBank.ts), optionally at another pitch. */
+function rendered(sound: RenderedSound, rate = 1): EffectDefinition['play'] {
+  return (ctx, out, t) => playRendered(ctx, out, t, sound, rate);
+}
+
+/** Something heavy set down: a low thud and a short knock of metal. `weight` about 0.5 to 1. */
+function setDown(ctx: AudioContext, out: AudioNode, t: number, weight: number): void {
+  noiseBurst(ctx, out, t, { duration: 0.12, peak: 0.14 * weight, filter: 'lowpass', from: 700, to: 90 });
+  tone(ctx, out, t, { wave: 'sine', from: 110, to: 52, duration: 0.16, peak: 0.16 * weight });
+  metal(ctx, out, t + 0.01, 420 * vary(0.1), 0.02 * weight);
+}
+
+/** A short metallic clank: inharmonic partials that ring briefly. */
+function metal(ctx: AudioContext, out: AudioNode, t: number, base: number, peak: number): void {
+  for (const [ratio, level, length] of [
+    [1, 1, 0.22],
+    [2.41, 0.6, 0.14],
+    [3.87, 0.4, 0.09],
+    [5.93, 0.25, 0.06],
+  ] as const) {
+    tone(ctx, out, t, {
+      wave: 'sine',
+      from: base * ratio,
+      to: base * ratio * 0.995,
+      duration: length,
+      peak: peak * level,
+    });
+  }
+}
+
+/** Rotors spinning up: band-limited noise chopped by the blades, rising in pitch. */
+function rotor(ctx: AudioContext, out: AudioNode, t: number, duration: number, peak: number): void {
   noiseBurst(ctx, out, t, {
     duration,
-    peak: 0.3 + 0.12 * size,
-    filter: 'lowpass',
-    from: 2600 / size,
-    to: 90,
+    peak,
+    filter: 'bandpass',
+    from: 700,
+    to: 1600,
+    q: 3,
+    attack: duration * 0.4,
+    tremolo: 55,
   });
-  tone(ctx, out, t, {
-    wave: 'sine',
-    from: 110 / size,
-    to: 32,
-    duration: duration * 0.8,
-    peak: 0.35 + 0.15 * size,
-  });
-  return duration;
+}
+
+/** A metal structure groaning: detuned low saws sagging in pitch through a dark filter. */
+function groan(ctx: AudioContext, out: AudioNode, t: number, duration: number, peak: number): void {
+  for (const [from, to] of [
+    [110, 52],
+    [116, 49],
+  ] as const) {
+    tone(ctx, out, t, { wave: 'sawtooth', from, to, duration, peak, attack: 0.1, lowpass: 380 });
+  }
+}
+
+/** Detuned sawtooth chord through a lowpass that opens and closes: a brassy, cinematic swell. */
+function horn(
+  ctx: AudioContext,
+  out: AudioNode,
+  t: number,
+  frequencies: readonly number[],
+  duration: number,
+  peak: number,
+  brightness = 1400,
+): void {
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.Q.value = 1.2;
+  filter.frequency.setValueAtTime(150, t);
+  filter.frequency.exponentialRampToValueAtTime(brightness, t + duration * 0.3);
+  filter.frequency.exponentialRampToValueAtTime(200, t + duration);
+  filter.connect(envelope(ctx, out, t, peak, duration, duration * 0.25));
+  for (const frequency of frequencies) {
+    for (const cents of [-9, 9]) {
+      const oscillator = ctx.createOscillator();
+      oscillator.type = 'sawtooth';
+      oscillator.frequency.value = frequency;
+      oscillator.detune.value = cents;
+      oscillator.connect(filter);
+      oscillator.start(t);
+      oscillator.stop(t + duration + 0.05);
+    }
+  }
 }
 
 interface ToneOptions {
@@ -399,6 +552,8 @@ interface NoiseOptions {
   readonly to: number;
   readonly q?: number;
   readonly attack?: number;
+  /** Hz of a volume chop (rotor blades, a drill). */
+  readonly tremolo?: number;
 }
 
 function noiseBurst(ctx: AudioContext, out: AudioNode, t: number, options: NoiseOptions): void {
@@ -409,9 +564,20 @@ function noiseBurst(ctx: AudioContext, out: AudioNode, t: number, options: Noise
   filter.Q.value = options.q ?? 0.7;
   filter.frequency.setValueAtTime(options.from, t);
   filter.frequency.exponentialRampToValueAtTime(options.to, t + options.duration);
-  source
-    .connect(filter)
-    .connect(envelope(ctx, out, t, options.peak, options.duration, options.attack ?? 0.003));
+  let node: AudioNode = source.connect(filter);
+  if (options.tremolo !== undefined) {
+    const chop = ctx.createGain();
+    chop.gain.value = 0.55;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = options.tremolo;
+    const depth = ctx.createGain();
+    depth.gain.value = 0.45;
+    lfo.connect(depth).connect(chop.gain);
+    node = node.connect(chop);
+    lfo.start(t);
+    lfo.stop(t + options.duration + 0.05);
+  }
+  node.connect(envelope(ctx, out, t, options.peak, options.duration, options.attack ?? 0.003));
   // start somewhere in the buffer so that no two bursts are the same noise
   source.start(t, Math.random() * 0.5);
   source.stop(t + options.duration + 0.05);

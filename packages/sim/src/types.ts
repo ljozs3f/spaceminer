@@ -4,7 +4,7 @@ export type PlayerId = string;
 /** Entity ids come from a counter in the state, so they are deterministic. */
 export type EntityId = number;
 
-export const BUILDING_TYPES = ['mine', 'solar', 'laser', 'missile'] as const;
+export const BUILDING_TYPES = ['mine', 'solar', 'laser', 'missile', 'repair'] as const;
 export type BuildingType = (typeof BUILDING_TYPES)[number];
 export type TurretType = Extract<BuildingType, 'laser' | 'missile'>;
 export type BuildingLevel = 1 | 2 | 3;
@@ -15,6 +15,10 @@ export type AsteroidSize = (typeof ASTEROID_SIZES)[number];
 export const ENEMY_TYPES = ['raider', 'gunship', 'dreadnought'] as const;
 export type EnemyType = (typeof ENEMY_TYPES)[number];
 
+/** In the order the wave spawner has always drawn them, so levels with all four keep their maps. */
+export const MAP_EDGES = ['top', 'right', 'bottom', 'left'] as const;
+export type MapEdge = (typeof MAP_EDGES)[number];
+
 export type GameModeId = 'mining';
 export type GameStatus = 'running' | 'won' | 'lost';
 
@@ -24,6 +28,10 @@ export interface PlayerState {
   /** Energy produced and consumed by the player's buildings in the current tick. */
   energyProduced: number;
   energyConsumed: number;
+  /** Ultra Instinct (ULTRA_INSTINCT_CONFIG) is on in the ticks before this one. */
+  ultraInstinctUntilTick: number;
+  /** Ultra Instinct can be started again from this tick on. */
+  ultraInstinctReadyTick: number;
 }
 
 /** Positions of grid objects are cells; a building's center is at (x + 0.5, y + 0.5). */
@@ -47,6 +55,8 @@ export interface Building {
   hp: number;
   /** Turrets: ticks until the next shot. */
   cooldown: number;
+  /** Turrets: projectiles of the current salvo still to fire (0: the next shot starts a new salvo). */
+  salvoLeft: number;
   /** What the building works on in this tick: the asteroid a mine mines, the pirate a turret aims at. */
   targetId: EntityId | null;
 }
@@ -80,6 +90,24 @@ export interface Projectile {
   splashRadius: number;
 }
 
+/**
+ * A repair drone of a repair hive. It flies to a damaged building of its owner in the hive's range, repairs
+ * it from a spot beside it, and flies home when nothing needs repair. Pirates never attack drones.
+ */
+export interface Drone {
+  id: EntityId;
+  hiveId: EntityId;
+  ownerId: PlayerId;
+  /** Its place among the hive's drones (0, 1, 2): where it docks and which side of a building it works on. */
+  slot: number;
+  x: number;
+  y: number;
+  /** The building it flies to or repairs; null: on its way home, or docked. */
+  targetId: EntityId | null;
+  /** At its target and repairing it in this tick. */
+  repairing: boolean;
+}
+
 export interface WaveState {
   /** Number of waves spawned so far. */
   index: number;
@@ -103,6 +131,7 @@ export interface GameState {
   buildings: Building[];
   enemies: Enemy[];
   projectiles: Projectile[];
+  drones: Drone[];
 }
 
 export type ReadonlyDeep<T> = T extends readonly (infer E)[]

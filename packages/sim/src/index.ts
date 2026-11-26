@@ -4,6 +4,7 @@ export type {
   PlaceBuildingCommand,
   RejectionReason,
   SellBuildingCommand,
+  UltraInstinctCommand,
   UpgradeBuildingCommand,
 } from './commands';
 export { validateCommand } from './commands';
@@ -11,12 +12,13 @@ export type {
   BuildingStats,
   BuildingStatsByType,
   MineStats,
+  RepairStats,
   SolarStats,
   TurretStats,
 } from './config/buildings';
 export type { AsteroidSizeConfig } from './config/asteroids';
 export { ASTEROID_CONFIG } from './config/asteroids';
-export { BUILDING_CONFIG, BUILDING_SALE } from './config/buildings';
+export { BUILDING_CONFIG, BUILDING_SALE, DRONE_CONFIG } from './config/buildings';
 export type { EnemyStats } from './config/enemies';
 export { ENEMY_CONFIG } from './config/enemies';
 export type {
@@ -29,12 +31,14 @@ export type {
 export { LEVELS } from './config/levels';
 export { MINING_MODE_CONFIG } from './config/modes';
 export { TICK_MS, TICK_RATE } from './config/simulation';
+export { ULTRA_INSTINCT_CONFIG } from './config/ultraInstinct';
 export { getBuildingEnergy, getBuildingStats, getSellValue, nextBuildingLevel } from './buildings';
 export type { GameMode } from './modes/game-mode';
 export { GAME_MODES, getGameMode } from './modes/registry';
 export type { GameEvent } from './events';
 export {
   asteroidCenter,
+  boostOf,
   distanceToAsteroid,
   energyEfficiency,
   findAsteroidAt,
@@ -42,6 +46,7 @@ export {
   findById,
   findPlayer,
   isInBounds,
+  isUltraInstinctActive,
   minedOreFraction,
   ticksUntilNextWave,
 } from './queries';
@@ -50,4 +55,4 @@ export { createGame, step } from './simulation';
 export type * from './types';
 export type { WaveGroup } from './systems/waves';
 export { getWaveComposition } from './systems/waves';
-export { ASTEROID_SIZES, BUILDING_TYPES, ENEMY_TYPES } from './types';
+export { ASTEROID_SIZES, BUILDING_TYPES, ENEMY_TYPES, MAP_EDGES } from './types';

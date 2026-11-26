@@ -1,8 +1,11 @@
 import { getBuildingEnergy } from '../buildings';
-import { energyEfficiency } from '../queries';
+import { boostOf, energyEfficiency } from '../queries';
 import type { GameState, PlayerId } from '../types';
 
-/** Recomputes every player's energy production and consumption from their buildings. */
+/**
+ * Recomputes every player's energy production and consumption from their buildings. Under Ultra Instinct
+ * the solar panels make many times their energy.
+ */
 export function updateEnergy(state: GameState): void {
   const players = new Map(state.players.map((player) => [player.id, player]));
   for (const player of state.players) {
@@ -13,7 +16,7 @@ export function updateEnergy(state: GameState): void {
     const player = players.get(building.ownerId);
     if (!player) continue;
     const energy = getBuildingEnergy(building.type, building.level);
-    player.energyProduced += energy.produced;
+    player.energyProduced += energy.produced * boostOf(state, player.id);
     player.energyConsumed += energy.consumed;
   }
 }

@@ -4,11 +4,17 @@ import { MusicPlayer, type MusicScene } from './MusicPlayer';
 
 /** Seconds for volume changes, so sliders and muting do not click. */
 const VOLUME_SECONDS = 0.05;
+/** A short, dark space reverb under the effects: they sound like they happen somewhere, not in a box. */
+const EFFECTS_REVERB = { seconds: 1.3, falloff: 3.2, send: 0.2, cutoff: 3500 } as const;
 
 interface Output {
   readonly ctx: AudioContext;
   readonly master: GainNode;
   readonly music: GainNode;
+  /** Under the music volume: pulled down while an alarm sounds. */
+  readonly duck: GainNode;
+  /** Under the duck: silences the soundtrack while other music plays (Ultra Instinct). */
+  readonly hold: GainNode;
   readonly effects: GainNode;
   readonly musicPlayer: MusicPlayer;
 }
@@ -30,9 +36,12 @@ export class AudioEngine {
       const ctx = new AudioContext();
       const master = ctx.createGain();
       const music = ctx.createGain();
+      const duck = ctx.createGain();
+      const hold = ctx.createGain();
       const effects = ctx.createGain();
-      music.connect(master);
+      music.connect(duck).connect(hold).connect(master);
       effects.connect(master);
+      connectEffectsReverb(ctx, effects, master);
       // a limiter: loud moments (music and several explosions at full volume) are held below clipping
       const limiter = ctx.createDynamicsCompressor();
       limiter.threshold.value = -6;
@@ -41,7 +50,15 @@ export class AudioEngine {
       limiter.attack.value = 0.003;
       limiter.release.value = 0.25;
       master.connect(limiter).connect(ctx.destination);
-      this.output = { ctx, master, music, effects, musicPlayer: new MusicPlayer(ctx, music) };
+      this.output = {
+        ctx,
+        master,
+        music,
+        duck,
+        hold,
+        effects,
+        musicPlayer: new MusicPlayer(ctx, music),
+      };
       this.applySettings(this.settings);
       this.output.musicPlayer.setScene(this.scene);
       this.output.musicPlayer.setIntensity(this.intensity);
@@ -61,6 +78,30 @@ export class AudioEngine {
   setMusicScene(scene: MusicScene | null): void {
     this.scene = scene;
     this.output?.musicPlayer.setScene(scene);
+  }
+
+  /** Pulls the music down to `level` (0 to 1) for `seconds`, then lets it back up: an alarm cuts through. */
+  duckMusic(level: number, seconds: number): void {
+    if (!this.output) return;
+    const { ctx, duck } = this.output;
+    const now = ctx.currentTime;
+    duck.gain.cancelScheduledValues(now);
+    duck.gain.setTargetAtTime(level, now, 0.04);
+    duck.gain.setTargetAtTime(1, now + seconds, 0.5);
+  }
+
+  /** Fades the soundtrack out while other music plays (true), and back in (false). */
+  holdMusic(held: boolean): void {
+    if (!this.output) return;
+    const { ctx, hold } = this.output;
+    const now = ctx.currentTime;
+    hold.gain.cancelScheduledValues(now);
+    hold.gain.setTargetAtTime(held ? 0 : 1, now, held ? 0.15 : 0.6);
+  }
+
+  /** The volume music should play at, 0 to 1: the music volume, 0 when muted. For music outside the engine. */
+  get musicLevel(): number {
+    return this.settings.muted ? 0 : this.settings.musicVolume;
   }
 
   /** 0: calm, 1: battle. */
@@ -95,4 +136,23 @@ export class AudioEngine {
       (seconds + 0.1) * 1000,
     );
   }
+}
+
+/** The effects' reverb send, from `from` to `to`: a dark synthetic impulse response (stereo noise that decays). */
+function connectEffectsReverb(ctx: AudioContext, from: AudioNode, to: AudioNode): void {
+  const { seconds, falloff, send, cutoff } = EFFECTS_REVERB;
+  const length = Math.floor(ctx.sampleRate * seconds);
+  const impulse = ctx.createBuffer(2, length, ctx.sampleRate);
+  for (let channel = 0; channel < 2; channel++) {
+    const data = impulse.getChannelData(channel);
+    for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length) ** falloff;
+  }
+  const input = ctx.createGain();
+  input.gain.value = send;
+  const convolver = ctx.createConvolver();
+  convolver.buffer = impulse;
+  const dark = ctx.createBiquadFilter();
+  dark.type = 'lowpass';
+  dark.frequency.value = cutoff;
+  from.connect(input).connect(convolver).connect(dark).connect(to);
 }

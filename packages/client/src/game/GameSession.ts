@@ -28,6 +28,7 @@ export class GameSession {
   private readonly queue: Command[] = [];
   private readonly previousPositions = new Map<EntityId, Point>();
   private accumulatorMs = 0;
+  private paused = false;
   private readonly unsubscribe: () => void;
 
   constructor(
@@ -44,11 +45,21 @@ export class GameSession {
     return this.game;
   }
 
+  get isPaused(): boolean {
+    return this.paused;
+  }
+
+  /** A paused game keeps its state: no ticks run and moving objects stay where they are drawn. */
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+  }
+
   /**
    * Runs the ticks that are due after deltaMs of real time. Returns how far the display is between the
    * previous and the current tick (0 to 1), for interpolating moving objects.
    */
   advance(deltaMs: number): number {
+    if (this.paused) return this.isRunning() ? this.accumulatorMs / TICK_MS : 1;
     this.accumulatorMs += Math.min(deltaMs, MAX_FRAME_MS);
     let ticks = 0;
     while (this.accumulatorMs >= TICK_MS && this.isRunning()) {
@@ -78,7 +89,7 @@ export class GameSession {
 
   private tick(): void {
     this.previousPositions.clear();
-    for (const { id, x, y } of [...this.game.enemies, ...this.game.projectiles]) {
+    for (const { id, x, y } of [...this.game.enemies, ...this.game.projectiles, ...this.game.drones]) {
       this.previousPositions.set(id, { x, y });
     }
     const { commandResults, events } = step(this.game, this.queue.splice(0));

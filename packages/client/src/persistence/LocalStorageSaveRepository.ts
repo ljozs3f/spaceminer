@@ -54,6 +54,9 @@ function parseSave(raw: string | null): SaveData | null {
         audio: DEFAULT_AUDIO_SETTINGS,
       };
     case 2:
+    case 3: // versions 3 and 4 had a soundtrack choice: the soundtrack is fixed now, it is dropped
+    case 4:
+    case 5:
       return {
         schemaVersion: SAVE_SCHEMA_VERSION,
         playerId,

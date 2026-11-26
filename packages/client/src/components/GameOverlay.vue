@@ -17,7 +17,7 @@ defineEmits<{ restart: []; next: []; exit: [] }>();
         <button type="button" @click="$emit('restart')">
           {{ status === 'won' ? 'Play again' : 'Retry' }}
         </button>
-        <button type="button" @click="$emit('exit')">Level select</button>
+        <button type="button" @click="$emit('exit')">Menu</button>
       </div>
     </div>
   </div>

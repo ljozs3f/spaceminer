@@ -1,23 +1,35 @@
 <script setup lang="ts">
 import { LEVELS, type LevelConfig } from '@space-miner/sim';
-import { onBeforeUnmount, onMounted, shallowRef, watchEffect } from 'vue';
+import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watchEffect } from 'vue';
 import type { AudioEngine } from './audio/AudioEngine';
+import BootScreen from './components/BootScreen.vue';
+import CreditsScreen from './components/CreditsScreen.vue';
 import GameView from './components/GameView.vue';
-import LevelSelect from './components/LevelSelect.vue';
 import MainMenu from './components/MainMenu.vue';
+import SectorLoading from './components/SectorLoading.vue';
 import SoundSettings from './components/SoundSettings.vue';
 import { withLevelCompleted } from './persistence/progress';
 import type { AudioSettings, SaveData, SaveRepository } from './persistence/SaveRepository';
 
 const props = defineProps<{ saves: SaveRepository; audio: AudioEngine }>();
 
-type Screen =
-  | { readonly name: 'menu' }
-  | { readonly name: 'levels' }
-  | { readonly name: 'game'; readonly id: number; readonly level: LevelConfig; readonly seed: number };
+interface Sortie {
+  readonly id: number;
+  readonly level: LevelConfig;
+  readonly seed: number;
+}
 
-const screen = shallowRef<Screen>({ name: 'menu' });
+type Screen =
+  | { readonly name: 'boot' }
+  | { readonly name: 'menu' }
+  | { readonly name: 'credits' }
+  | ({ readonly name: 'loading' } & Sortie)
+  /** arrival: came from the loading screen's jump (a restart starts right away). */
+  | ({ readonly name: 'game'; readonly arrival: boolean } & Sortie);
+
+const screen = shallowRef<Screen>({ name: 'boot' });
 const save = shallowRef<SaveData | null>(null);
+const gameView = useTemplateRef('gameView');
 let gamesStarted = 0;
 
 watchEffect(() => {
@@ -35,10 +47,48 @@ function onKeyDown(event: KeyboardEvent): void {
   }
 }
 
+/**
+ * The browser's back button must not throw a running game away unasked: while a sector is on, the history
+ * holds one extra entry. Going back lands on the entry before it; the game puts its entry back and asks.
+ */
+const HISTORY_MARK = 'space-miner-sector';
+/** The next popstate is our own history.back() on the way to the menu. */
+let leavingHistory = false;
+
+function inSectorHistory(): boolean {
+  return (history.state as Record<string, unknown> | null)?.[HISTORY_MARK] === true;
+}
+
+function enterSectorHistory(): void {
+  if (!inSectorHistory()) history.pushState({ [HISTORY_MARK]: true }, '');
+}
+
+function leaveSectorHistory(): void {
+  if (!inSectorHistory()) return;
+  leavingHistory = true;
+  history.back();
+}
+
+function onPopState(): void {
+  if (leavingHistory) {
+    leavingHistory = false;
+    return;
+  }
+  const current = screen.value;
+  if (current.name === 'loading') {
+    // nothing is lost yet
+    screen.value = { name: 'menu' };
+  } else if (current.name === 'game') {
+    history.pushState({ [HISTORY_MARK]: true }, '');
+    gameView.value?.requestExit();
+  }
+}
+
 onMounted(async () => {
   window.addEventListener('pointerdown', unlockAudio);
   window.addEventListener('keydown', unlockAudio);
   window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('popstate', onPopState);
   save.value = await props.saves.load();
   props.audio.applySettings(save.value.audio);
 });
@@ -47,6 +97,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerdown', unlockAudio);
   window.removeEventListener('keydown', unlockAudio);
   window.removeEventListener('keydown', onKeyDown);
+  window.removeEventListener('popstate', onPopState);
 });
 
 async function updateAudio(settings: AudioSettings): Promise<void> {
@@ -56,9 +107,34 @@ async function updateAudio(settings: AudioSettings): Promise<void> {
   await props.saves.save(save.value);
 }
 
-function play(level: LevelConfig): void {
+function sortie(level: LevelConfig): Sortie {
   const [seed = 0] = crypto.getRandomValues(new Uint32Array(1));
-  screen.value = { name: 'game', id: ++gamesStarted, level, seed };
+  return { id: ++gamesStarted, level, seed };
+}
+
+/** From the menu or to the next level: the jump with the sector's briefing first. */
+function play(level: LevelConfig): void {
+  enterSectorHistory();
+  screen.value = { name: 'loading', ...sortie(level) };
+}
+
+function restart(level: LevelConfig): void {
+  enterSectorHistory();
+  screen.value = { name: 'game', arrival: false, ...sortie(level) };
+}
+
+function deploy(): void {
+  const current = screen.value;
+  if (current.name === 'loading') screen.value = { ...current, name: 'game', arrival: true };
+}
+
+function toMenu(): void {
+  leaveSectorHistory();
+  screen.value = { name: 'menu' };
+}
+
+function sectorNumber(level: LevelConfig): string {
+  return String(LEVELS.findIndex((candidate) => candidate.id === level.id) + 1).padStart(2, '0');
 }
 
 function nextLevel(level: LevelConfig): LevelConfig | undefined {
@@ -78,28 +154,38 @@ function onNext(level: LevelConfig): void {
 </script>
 
 <template>
-  <p v-if="!save" class="loading">Loading…</p>
+  <BootScreen v-if="screen.name === 'boot' || !save" :audio="audio" @done="screen = { name: 'menu' }" />
   <template v-else>
-    <MainMenu v-if="screen.name === 'menu'" @play="screen = { name: 'levels' }" />
-    <LevelSelect
-      v-else-if="screen.name === 'levels'"
+    <MainMenu
+      v-if="screen.name === 'menu'"
       :save="save"
       @play="play"
-      @back="screen = { name: 'menu' }"
+      @credits="screen = { name: 'credits' }"
+    />
+    <CreditsScreen v-else-if="screen.name === 'credits'" @back="screen = { name: 'menu' }" />
+    <SectorLoading
+      v-else-if="screen.name === 'loading'"
+      :key="`loading-${screen.id}`"
+      :level="screen.level"
+      :audio="audio"
+      @done="deploy"
     />
     <GameView
       v-else
+      ref="gameView"
       :key="screen.id"
       :level="screen.level"
+      :sector="sectorNumber(screen.level)"
       :seed="screen.seed"
       :player-id="save.playerId"
       :has-next-level="nextLevel(screen.level) !== undefined"
       :audio="audio"
+      :arrival="screen.arrival"
       @won="onWon"
-      @restart="play"
+      @restart="restart"
       @next="onNext"
-      @exit="screen = { name: 'levels' }"
+      @exit="toMenu"
     />
-    <SoundSettings :settings="save.audio" @change="updateAudio" />
   </template>
+  <SoundSettings v-if="save" :settings="save.audio" @change="updateAudio" />
 </template>
