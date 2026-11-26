@@ -19,6 +19,8 @@ import GameMenu from './GameMenu.vue';
 import GameOverlay from './GameOverlay.vue';
 import HudBar from './HudBar.vue';
 import MapPopup from './MapPopup.vue';
+import UltraInstinctButton from './UltraInstinctButton.vue';
+import UltraInstinctOverlay from './UltraInstinctOverlay.vue';
 import WaveBanner, { type WaveNotice } from './WaveBanner.vue';
 
 const props = defineProps<{
@@ -78,6 +80,8 @@ const arriving = shallowRef(props.arrival);
 watch(menu, (open) => {
   session.setPaused(open !== null);
 });
+/** The game runs: not paused and not over. */
+const running = computed(() => menu.value === null && result.value === null);
 
 function refresh(): void {
   hud.value = selectHud(session.state, props.playerId);
@@ -238,6 +242,7 @@ function onKeyDown(event: KeyboardEvent): void {
     return;
   }
   if (key === 'u' && selected.value?.kind === 'building') upgradeSelected();
+  if (key === 'i' && !event.repeat) ultraInstinct();
 }
 
 onMounted(() => {
@@ -279,6 +284,10 @@ function upgradeSelected(): void {
   bus.emit('command', { type: 'upgradeBuilding', playerId: props.playerId, buildingId: selectedId.value });
 }
 
+function ultraInstinct(): void {
+  bus.emit('command', { type: 'ultraInstinct', playerId: props.playerId });
+}
+
 function sellSelected(): void {
   if (selectedId.value === null) return;
   bus.emit('command', { type: 'sellBuilding', playerId: props.playerId, buildingId: selectedId.value });
@@ -304,6 +313,7 @@ function closeSelection(): void {
         />
         <AsteroidPanel v-else :asteroid="selected" @close="closeSelection" />
       </MapPopup>
+      <UltraInstinctOverlay :view="hud.ultraInstinct" :audio="audio" :running="running" />
       <WaveBanner :wave="wave" />
       <AlertStack :alerts="alerts" />
       <div class="zoom-controls" role="group" aria-label="Zoom">
@@ -331,7 +341,9 @@ function closeSelection(): void {
         @exit="emit('exit')"
       />
     </div>
-    <BuildBar :ore="hud.ore" :placing="placing" @select="selectPlacement" />
+    <BuildBar :ore="hud.ore" :placing="placing" @select="selectPlacement">
+      <UltraInstinctButton :view="hud.ultraInstinct" @activate="ultraInstinct" />
+    </BuildBar>
     <GameMenu
       v-if="menu && !result"
       :key="menu"

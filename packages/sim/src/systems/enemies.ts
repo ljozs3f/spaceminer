@@ -1,13 +1,13 @@
 import { ASTEROID_CONFIG } from '../config/asteroids';
 import { ENEMY_CONFIG, FLIGHT_CONFIG } from '../config/enemies';
 import type { GameEvent } from '../events';
-import { asteroidCenter, findNearest } from '../queries';
+import { asteroidCenter, boostOf, findNearest } from '../queries';
 import type { Enemy, GameState } from '../types';
 import { cellCenter, DISTANCE_EPSILON, distance, intervalTicks, perTick } from '../units';
 
 /**
  * Pirates fly to the nearest building, around the asteroids in their way, and fire at it once in range.
- * Destroyed buildings disappear.
+ * Buildings under Ultra Instinct take only a fraction of the damage. Destroyed buildings disappear.
  */
 export function updateEnemies(state: GameState, events: GameEvent[]): void {
   for (const enemy of state.enemies) {
@@ -28,7 +28,7 @@ export function updateEnemies(state: GameState, events: GameEvent[]): void {
       enemy.x += direction.x * move;
       enemy.y += direction.y * move;
     } else if (enemy.cooldown === 0) {
-      target.hp -= stats.damage;
+      target.hp -= stats.damage / boostOf(state, target.ownerId);
       enemy.cooldown = intervalTicks(stats.attacksPerSecond);
       events.push({
         type: 'enemyFired',

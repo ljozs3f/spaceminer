@@ -3,6 +3,7 @@ import { LEVELS, type LevelConfig } from '@space-miner/sim';
 import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watchEffect } from 'vue';
 import type { AudioEngine } from './audio/AudioEngine';
 import BootScreen from './components/BootScreen.vue';
+import CreditsScreen from './components/CreditsScreen.vue';
 import GameView from './components/GameView.vue';
 import MainMenu from './components/MainMenu.vue';
 import SectorLoading from './components/SectorLoading.vue';
@@ -21,6 +22,7 @@ interface Sortie {
 type Screen =
   | { readonly name: 'boot' }
   | { readonly name: 'menu' }
+  | { readonly name: 'credits' }
   | ({ readonly name: 'loading' } & Sortie)
   /** arrival: came from the loading screen's jump (a restart starts right away). */
   | ({ readonly name: 'game'; readonly arrival: boolean } & Sortie);
@@ -154,7 +156,13 @@ function onNext(level: LevelConfig): void {
 <template>
   <BootScreen v-if="screen.name === 'boot' || !save" :audio="audio" @done="screen = { name: 'menu' }" />
   <template v-else>
-    <MainMenu v-if="screen.name === 'menu'" :save="save" @play="play" />
+    <MainMenu
+      v-if="screen.name === 'menu'"
+      :save="save"
+      @play="play"
+      @credits="screen = { name: 'credits' }"
+    />
+    <CreditsScreen v-else-if="screen.name === 'credits'" @back="screen = { name: 'menu' }" />
     <SectorLoading
       v-else-if="screen.name === 'loading'"
       :key="`loading-${screen.id}`"

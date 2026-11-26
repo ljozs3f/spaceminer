@@ -28,6 +28,10 @@ export interface PlayerState {
   /** Energy produced and consumed by the player's buildings in the current tick. */
   energyProduced: number;
   energyConsumed: number;
+  /** Ultra Instinct (ULTRA_INSTINCT_CONFIG) is on in the ticks before this one. */
+  ultraInstinctUntilTick: number;
+  /** Ultra Instinct can be started again from this tick on. */
+  ultraInstinctReadyTick: number;
 }
 
 /** Positions of grid objects are cells; a building's center is at (x + 0.5, y + 0.5). */

@@ -1,11 +1,14 @@
 import { getBuildingStats } from '../buildings';
-import { asteroidCenter, distanceToAsteroid, findNearest, findPlayer } from '../queries';
+import { asteroidCenter, boostOf, distanceToAsteroid, findNearest, findPlayer } from '../queries';
 import type { GameEvent } from '../events';
 import type { GameState } from '../types';
 import { perTick } from '../units';
 import { getEfficiencies } from './energy';
 
-/** Mines move ore from the nearest asteroids in range to their owner. Depleted asteroids disappear. */
+/**
+ * Mines move ore from the nearest asteroids in range to their owner (many times as much under Ultra
+ * Instinct). Depleted asteroids disappear.
+ */
 export function updateMining(state: GameState, events: GameEvent[]): void {
   const efficiencies = getEfficiencies(state);
   for (const mine of state.buildings) {
@@ -13,7 +16,7 @@ export function updateMining(state: GameState, events: GameEvent[]): void {
     const owner = findPlayer(state.players, mine.ownerId);
     if (!owner) continue;
     const stats = getBuildingStats('mine', mine.level);
-    let amount = perTick(stats.orePerSecond) * (efficiencies.get(owner.id) ?? 0);
+    let amount = perTick(stats.orePerSecond) * (efficiencies.get(owner.id) ?? 0) * boostOf(state, owner.id);
     mine.targetId = null;
     while (amount > 0) {
       const asteroid = findNearest(

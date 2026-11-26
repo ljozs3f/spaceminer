@@ -1,6 +1,6 @@
 import { getBuildingStats } from '../buildings';
 import { DRONE_CONFIG } from '../config/buildings';
-import { findById } from '../queries';
+import { boostOf, findById } from '../queries';
 import type { Building, Drone, GameState } from '../types';
 import { cellCenter, DISTANCE_EPSILON, distance, perTick } from '../units';
 import { getEfficiencies } from './energy';
@@ -8,8 +8,8 @@ import { getEfficiencies } from './energy';
 /**
  * Repair hives keep their drones (one per level) and send them to the damaged buildings of their owner in
  * range: the most damaged first, spread over the damage. A drone repairs from a spot beside its building,
- * at a rate that follows the owner's energy efficiency, and flies home when nothing needs repair. Drones of
- * a hive that is gone disappear with it.
+ * at a rate that follows the owner's energy efficiency, and flies home when nothing needs repair. Under
+ * Ultra Instinct they fly and repair many times faster. Drones of a hive that is gone disappear with it.
  */
 export function updateDrones(state: GameState): void {
   const hives = state.buildings.filter((building) => building.type === 'repair');
@@ -42,11 +42,12 @@ export function updateDrones(state: GameState): void {
     const hive = findById(state.buildings, drone.hiveId);
     if (!hive) continue;
     const stats = getBuildingStats('repair', hive.level);
+    const boost = boostOf(state, drone.ownerId);
     const target = chooseTarget(state, drone, hive, stats.range);
     drone.targetId = target?.id ?? null;
     const point = target ? workPoint(target, drone.slot) : dockPoint(hive, drone.slot);
     const d = distance(drone.x, drone.y, point.x, point.y);
-    const move = perTick(stats.droneSpeed);
+    const move = perTick(stats.droneSpeed) * boost;
     drone.repairing = false;
     if (d > move) {
       drone.x += ((point.x - drone.x) / d) * move;
@@ -58,7 +59,7 @@ export function updateDrones(state: GameState): void {
     const efficiency = efficiencies.get(drone.ownerId) ?? 0;
     if (!target || efficiency === 0) continue;
     const { maxHp } = getBuildingStats(target.type, target.level);
-    target.hp = Math.min(maxHp, target.hp + perTick(stats.repairPerSecond) * efficiency);
+    target.hp = Math.min(maxHp, target.hp + perTick(stats.repairPerSecond) * efficiency * boost);
     drone.repairing = true;
   }
 }

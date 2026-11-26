@@ -35,6 +35,8 @@ export type SoundEffect =
   | 'waveAlarm'
   | 'warpIn'
   | 'warpOut'
+  | 'ultraInstinct'
+  | 'ultraInstinctEnd'
   | 'won'
   | 'lost';
 
@@ -336,6 +338,56 @@ export const EFFECTS: Readonly<Record<SoundEffect, EffectDefinition>> = {
   // the intro and the sector loading: spooling up for the jump, and dropping out of it
   warpIn: { maxVoices: 1, minIntervalMs: 500, play: rendered('warpIn') },
   warpOut: { maxVoices: 1, minIntervalMs: 500, play: rendered('warpOut') },
+  // Ultra Instinct: the aura flares up. A deep drop, a rush of air rising, a bright, wide chord blooming and
+  // glassy overtones shimmering above it
+  ultraInstinct: {
+    maxVoices: 1,
+    minIntervalMs: 1000,
+    play: (ctx, out, t) => {
+      tone(ctx, out, t, { wave: 'sine', from: 96, to: 34, duration: 1.5, peak: 0.24 });
+      noiseBurst(ctx, out, t, { duration: 0.35, peak: 0.12, filter: 'lowpass', from: 2400, to: 120 });
+      noiseBurst(ctx, out, t, {
+        duration: 1.8,
+        peak: 0.06,
+        filter: 'bandpass',
+        from: 350,
+        to: 7000,
+        q: 1.4,
+        attack: 0.6,
+      });
+      horn(ctx, out, t + 0.04, [98, 146.8, 196, 293.7, 392, 587.3], 2.4, 0.03, 3400);
+      [1568, 2349.3, 3136, 4698.6].forEach((frequency, index) => {
+        tone(ctx, out, t + 0.3 + index * 0.11, {
+          wave: 'sine',
+          from: frequency,
+          to: frequency * 1.01,
+          duration: 1.4,
+          peak: 0.011,
+          attack: 0.08,
+        });
+      });
+      return 2.5;
+    },
+  },
+  // the aura dies down: the air falls and a soft, low chord fades
+  ultraInstinctEnd: {
+    maxVoices: 1,
+    minIntervalMs: 1000,
+    play: (ctx, out, t) => {
+      noiseBurst(ctx, out, t, {
+        duration: 1.2,
+        peak: 0.04,
+        filter: 'bandpass',
+        from: 5000,
+        to: 300,
+        q: 1.2,
+        attack: 0.05,
+      });
+      horn(ctx, out, t, [98, 146.8, 196], 1.4, 0.025, 1200);
+      tone(ctx, out, t, { wave: 'sine', from: 220, to: 70, duration: 1, peak: 0.05 });
+      return 1.5;
+    },
+  },
   won: {
     maxVoices: 1,
     minIntervalMs: 1000,

@@ -81,6 +81,7 @@ packages/
     art/                         generated sprite sheets and background, as they came
     scripts/sprites.ts           cuts the sheets into sprites
     src/events.ts                typed event bus between Vue and Phaser
+    src/credits.ts               what the credits page shows
 docker/                          nginx config and the localdev certificate folder
 Dockerfile, docker-compose.yml, Makefile
 ```
@@ -95,7 +96,8 @@ state and turns input into commands; the same package can run unchanged on a ser
 each works on: the asteroid a mine mines, the pirate a turret aims at), asteroids, pirates, projectiles, wave
 timer, PRNG state. Entity ids come from a counter in the state.
 
-**Commands.** Every player action is a typed command (`placeBuilding`, `upgradeBuilding`, `sellBuilding`) carrying a
+**Commands.** Every player action is a typed command (`placeBuilding`, `upgradeBuilding`, `sellBuilding`,
+`ultraInstinct`) carrying a
 `playerId`; buildings have an `ownerId`. `step(state, commands)` validates each command and returns a result
 with a typed rejection reason (`insufficientOre`, `cellOccupied`, `maxLevel`, ...), plus the typed events of the
 tick (`shotFired`, `enemyFired`, `enemyDestroyed`, `buildingDestroyed`, `waveStarted`, ...) for sound and visual effects
@@ -148,11 +150,21 @@ under the wave alarm.
 The soundtrack is fixed, only its volume can be changed (or muted): `loading.*` in
 `src/assets/music/` plays in the intro, the loading screens and the menu, `game.*` in a sector; while pirates
 attack, the game track opens up (a lowpass opens, a little louder). The files are fetched while the game loads
-and loop without the encoder's silence. Where a file is missing, the built-in soundtrack plays: "Sentinel
-Expanse" (`src/audio/songs/`), written as note data and played by `SongPlayer` with synthesized instruments
-(a choir pad, a low string ostinato, a horn section, film drums in its battle layer), through a mix bus
+and loop without the encoder's silence. Where a file is missing, the built-in soundtrack plays: "Nebula
+Rites" in the intro, the loading screens and the menu, "Sentinel Expanse" in a sector, so the two never sound
+alike (`src/audio/songs/`), written as note data and played by `SongPlayer` with synthesized instruments
+(choir pads, string ostinatos, a horn section, film drums in the battle layer), through a mix bus
 (`MusicPlayer`: rumble and harshness cut, a glue compressor, soft saturation). Browsers allow audio only after
 a user gesture, so the engine starts with the click that launches the game.
+
+While Ultra Instinct is on, its own music plays: the most replayed ten seconds (from 2:27) of "Ultra Instinct
+Rush (HQ Cover)" by PokéMixr92 (original theme by Norihito Sumitomo), from YouTube with its official
+embedded player (`src/audio/UltraInstinctMusic.ts`): nothing is downloaded or hosted here, the cover's author
+asks not to re-upload it and to be credited. The player is created paused when a sector starts, so it is
+ready by the time the button is pressed; while it plays it is on screen with the credit next to it (YouTube
+does not allow hidden players), at the music volume, and the soundtrack makes way for it (the engine's hold
+stage) and comes back as it fades out. It pauses with the game. Without YouTube (offline) the game goes on
+without it.
 
 **Persistence boundary.** Progress goes through the async `SaveRepository` interface, implemented by
 `LocalStorageSaveRepository`, the only code that touches `localStorage`. Saves have a `schemaVersion` (2: the
@@ -195,6 +207,13 @@ the repository without changes elsewhere.
   hit points, until wave 10, after which the waves stay at that strength. The HUD shows the next wave.
 - A destroyed ship pays a bounty in ore to the owner of the turret that destroyed it, so the defense keeps
   paying when the asteroids near the base run dry. Bounties do not count towards the mined ore.
+- **Ultra Instinct** (the button next to the buildings, or I): for 10 seconds every building of the player
+  works 10 times better: mines mine 10 times as fast, solar panels make 10 times their energy, turrets fire 10
+  times as fast (more than once a tick if needed), repair drones fly and repair 10 times as fast, and the
+  buildings take a tenth of the damage. Then it recharges for 60 seconds (the button's ring fills up). The
+  values are in `ULTRA_INSTINCT_CONFIG` (`packages/sim/src/config/ultraInstinct.ts`). While it is on, the
+  buildings glow in a flickering silver-blue aura with rising sparks, the map edges glow, a banner counts
+  the seconds down and its music plays (see Sound).
 - Ten sectors (levels) with rising difficulty. They differ in where the base starts (west, the middle, a
   corner, the east rim), how the ore lies, which map edges the pirates come from (every side, only the east,
   the north and the south, ...: `spawnEdges` in the level config), how early the heavy ships come and how fast
@@ -220,7 +239,8 @@ to upgrade or sell it from the card that opens next to it (U upgrades the select
 level's stats shown beside the current ones), click an asteroid to see its ore. The mouse wheel, the +/- keys
 or the zoom buttons (bottom right) zoom in up to 350% (0 shows the whole map again); dragging with any mouse
 button or the arrow/WASD keys pan, and the stars and the background follow with a little parallax
-(`src/phaser/CameraController.ts`). Esc (with nothing to cancel), P or the pause button pause the game. M
+(`src/phaser/CameraController.ts`). I starts Ultra Instinct. Esc (with nothing to cancel), P or the pause
+button pause the game. M
 mutes the sound; the speaker button (top right) has the music and effects volumes. The sound settings are
 saved.
 
@@ -233,10 +253,13 @@ show a page's own text there). Once the game is won or lost nothing is lost, so 
 The game opens with a loading screen over a star field (sprites, rendered sounds and music load, with
 progress); a click or a key launches it (browsers need that before any sound), then a ten-second intro plays:
 the drive spools up, jumps, the hyperspace tunnel, the drop out into an asteroid belt and a pirate raid shot
-down by turrets out of view, in time with its sounds, then the title (`BootScreen.vue`, `src/intro/`). A click
-or a key skips it; with reduced motion it is skipped. The menu shows the ten sectors with their difficulty and
-state, a button that continues with the next one, and a briefing with the buildings and the controls, over a
-moving space backdrop (`MenuBackdrop.vue`). Starting a sector jumps to it (`SectorLoading.vue`): the sector's
+down by turrets out of view, in time with its sounds, then the title (`BootScreen.vue`, `src/intro/`). What
+the ship does ("FTL drive charging", ...) types in large in the middle of the screen. A click or a key skips
+it; with reduced motion it is skipped. The menu shows the ten sectors with their difficulty and state, a button
+that continues with the next one, and a briefing with the buildings and the controls, over a moving space
+backdrop (`MenuBackdrop.vue`). Its Credits button opens the credits page (`CreditsScreen.vue`, data in
+`src/credits.ts`): the Ultra Instinct music with its authors, the soundtrack in use (the music files' credits,
+or the built-in songs), the art and sound, the tools. Starting a sector jumps to it (`SectorLoading.vue`): the sector's
 briefing (first wave, interval, where the pirates come from, starting ore, the ships and from which wave, a
 tip) over a warp field that spools up, then the jump, and the game fades in from its flash.
 
@@ -264,10 +287,12 @@ drawn pointing up and turned towards where they fly.
 
 ## Music
 
-The soundtrack is "Space Signal" by blemlin (intro, loading screens, menu) and "Galactic Arcade" by kissan4
-(in game), both under the Pixabay Content License. Pixabay does not allow automated downloads, so they are
+The soundtrack is "Space" by Sub_Clair (intro, loading screens, menu) and "Sci-Fi Action" by leberch (in
+game), both under the Pixabay Content License. Pixabay does not allow automated downloads, so they are
 downloaded by hand into `packages/client/src/assets/music/` as `loading.mp3` and `game.mp3`; the README in that
-folder has the links and the credits. Without them the built-in soundtrack plays.
+folder has the links, alternatives and the credits. Without them the built-in soundtrack plays.
+
+The Ultra Instinct music is played from YouTube (see Sound); the credits page names its authors.
 
 ## Versions
 

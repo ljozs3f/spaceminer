@@ -1,4 +1,6 @@
 import {
+  findPlayer,
+  isUltraInstinctActive,
   TICK_RATE,
   ticksUntilNextWave,
   type BuildingType,
@@ -36,6 +38,8 @@ function commandSound(command: Command): SoundEffect {
       return 'upgrade';
     case 'sellBuilding':
       return 'sell';
+    case 'ultraInstinct':
+      return 'ultraInstinct';
   }
 }
 
@@ -47,6 +51,8 @@ export class GameAudio {
   private weldTurn = 0;
   /** The countdown second pinged last. */
   private lastCountdown = 0;
+  /** Whether Ultra Instinct was on in the last tick, to hear it end. */
+  private ultraInstinct = false;
 
   constructor(
     private readonly audio: AudioEngine,
@@ -71,6 +77,7 @@ export class GameAudio {
         audio.setIntensity(Math.min(1, session.state.enemies.length / FULL_INTENSITY_ENEMIES));
         this.onDrones();
         this.onCountdown();
+        this.onUltraInstinct();
       }),
       bus.on('game:over', (status) => {
         audio.setIntensity(0);
@@ -114,6 +121,15 @@ export class GameAudio {
       case 'asteroidDepleted':
         break;
     }
+  }
+
+  /** The aura dies down when Ultra Instinct ends. */
+  private onUltraInstinct(): void {
+    const { state, playerId } = this.session;
+    const player = findPlayer(state.players, playerId);
+    const active = player !== undefined && isUltraInstinctActive(state, player);
+    if (this.ultraInstinct && !active && state.status === 'running') this.audio.play('ultraInstinctEnd');
+    this.ultraInstinct = active;
   }
 
   /** A ping for each of the last seconds before a wave. */

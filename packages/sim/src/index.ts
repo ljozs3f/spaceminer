@@ -4,6 +4,7 @@ export type {
   PlaceBuildingCommand,
   RejectionReason,
   SellBuildingCommand,
+  UltraInstinctCommand,
   UpgradeBuildingCommand,
 } from './commands';
 export { validateCommand } from './commands';
@@ -30,12 +31,14 @@ export type {
 export { LEVELS } from './config/levels';
 export { MINING_MODE_CONFIG } from './config/modes';
 export { TICK_MS, TICK_RATE } from './config/simulation';
+export { ULTRA_INSTINCT_CONFIG } from './config/ultraInstinct';
 export { getBuildingEnergy, getBuildingStats, getSellValue, nextBuildingLevel } from './buildings';
 export type { GameMode } from './modes/game-mode';
 export { GAME_MODES, getGameMode } from './modes/registry';
 export type { GameEvent } from './events';
 export {
   asteroidCenter,
+  boostOf,
   distanceToAsteroid,
   energyEfficiency,
   findAsteroidAt,
@@ -43,6 +46,7 @@ export {
   findById,
   findPlayer,
   isInBounds,
+  isUltraInstinctActive,
   minedOreFraction,
   ticksUntilNextWave,
 } from './queries';

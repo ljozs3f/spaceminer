@@ -5,6 +5,7 @@ import {
   findAt,
   findById,
   getBuildingStats,
+  isUltraInstinctActive,
   validateCommand,
   type AsteroidSize,
   type BuildingLevel,
@@ -49,6 +50,9 @@ const COLORS = {
   /** The hit point bar of a building that drones are repairing. */
   hpRepair: 0x4cf2c4,
   pip: 0xffffff,
+  /** Ultra Instinct: the silver-blue aura around the buildings and its brighter sparks. */
+  aura: 0x9fd4ff,
+  auraCore: 0xeef8ff,
 } as const;
 
 /** Drawing order, back to front. */
@@ -274,6 +278,12 @@ export class GameScene extends Phaser.Scene {
       this.bus.on('selection:change', (id) => {
         this.selectedId = id;
       }),
+      // Ultra Instinct flares up: a silver-blue flash and a jolt
+      this.bus.on('command:applied', (command) => {
+        if (command.type !== 'ultraInstinct') return;
+        this.cameras.main.flash(420, 200, 230, 255);
+        this.cameras.main.shake(260, 0.005);
+      }),
       this.bus.on('view:zoom', (action) => {
         if (action === 'reset') this.camera.reset();
         else this.camera.zoomBy(action === 'in' ? 1 : -1);
@@ -478,6 +488,10 @@ export class GameScene extends Phaser.Scene {
   private drawBuildings(alpha: number): void {
     const g = this.overlay;
     const now = this.time.now;
+    const { state } = this.session;
+    const boosted = new Set(
+      state.players.filter((player) => isUltraInstinctActive(state, player)).map((player) => player.id),
+    );
     const repairing = new Set(
       this.session.state.drones.flatMap((drone) =>
         drone.repairing && drone.targetId !== null ? [drone.targetId] : [],
@@ -495,6 +509,7 @@ export class GameScene extends Phaser.Scene {
         this.layers.buildings.draw(building.id, rig?.body ?? sprite, x, y, size, rotation);
         if (rig) this.drawMineParts(building.id, building.targetId !== null, rig, x, y, size);
       } else drawBuildingShape(g, building.type, x, y, 1);
+      if (boosted.has(building.ownerId)) this.drawAura(building.id, x, y, now);
 
       // level pips
       g.fillStyle(0x000000, 0.55).fillRoundedRect(x - 10, y + CELL_SIZE * 0.36 - 3.5, 20, 7, 3);
@@ -522,6 +537,26 @@ export class GameScene extends Phaser.Scene {
         const range = rangeOf(building.type, building.level);
         if (range !== undefined) g.lineStyle(1, COLORS.selection, 0.35).strokeCircle(x, y, range * CELL_SIZE);
       }
+    }
+  }
+
+  /** Ultra Instinct: a silver-blue aura flickers around the building, and sparks of it rise. */
+  private drawAura(id: EntityId, x: number, y: number, now: number): void {
+    const g = this.overlay;
+    const seconds = now / 1000;
+    const phase = hash(id) * Math.PI * 2;
+    const pulse = 0.5 + 0.5 * Math.sin(seconds * 7 + phase);
+    const radius = CELL_SIZE * (0.5 + 0.06 * pulse);
+    g.fillStyle(COLORS.aura, 0.06 + 0.05 * pulse).fillCircle(x, y, radius + 3);
+    g.lineStyle(2, COLORS.aura, 0.35 + 0.35 * pulse).strokeCircle(x, y, radius);
+    g.lineStyle(1, COLORS.auraCore, 0.55 * (1 - pulse)).strokeCircle(x, y, radius * 0.84);
+    const sparks = 4;
+    for (let i = 0; i < sparks; i++) {
+      const rise = (seconds * 0.9 + i / sparks + hash(id + i)) % 1;
+      const angle = phase + i * 1.7;
+      const sparkX = x + Math.cos(angle) * CELL_SIZE * 0.34;
+      const sparkY = y + CELL_SIZE * 0.35 - rise * CELL_SIZE * 0.95;
+      g.fillStyle(COLORS.auraCore, 0.85 * (1 - rise)).fillCircle(sparkX, sparkY, 0.6 + 1.6 * (1 - rise));
     }
   }
 

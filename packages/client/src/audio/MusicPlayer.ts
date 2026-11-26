@@ -4,7 +4,7 @@ import { SongPlayer } from './SongPlayer';
 
 /** menu: the intro, the loading screens and the menu; game: in a sector. */
 export type MusicScene = 'menu' | 'game';
-type Track = 'loading' | 'game';
+export type Track = 'loading' | 'game';
 
 const SCENE_TRACKS: Readonly<Record<MusicScene, Track>> = { menu: 'loading', game: 'game' };
 
@@ -22,6 +22,11 @@ const FILES = import.meta.glob<string>('../assets/music/*.{ogg,mp3,m4a,flac,wav}
 function trackUrl(track: Track): string | undefined {
   const entry = Object.entries(FILES).find(([path]) => path.split('/').pop()?.split('.')[0] === track);
   return entry?.[1];
+}
+
+/** Whether the track's music file is there (otherwise the built-in soundtrack plays), for the credits. */
+export function hasMusicFile(track: Track): boolean {
+  return trackUrl(track) !== undefined;
 }
 
 /** The bytes of the music files, fetched while the game loads (decoding needs the audio context). */

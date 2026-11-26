@@ -61,13 +61,18 @@ function toggle(type: BuildingType): void {
         </span>
       </button>
     </div>
+    <slot />
     <p class="build-hint" :class="{ placing: placingName !== null }">
       <template v-if="placingName">
-        Click a free cell to build the <b>{{ placingName }}</b>
+        <span>
+          Click a free cell to build the <b>{{ placingName }}</b>
+        </span>
         <span class="hint-keys"><kbd>Esc</kbd> or right click to cancel</span>
       </template>
       <template v-else>
-        Pick a building <kbd>1</kbd>–<kbd>{{ items.length }}</kbd>
+        <span>
+          Pick a building <kbd>1</kbd>–<kbd>{{ items.length }}</kbd>
+        </span>
         <span class="hint-keys">Click your buildings to upgrade them</span>
       </template>
     </p>

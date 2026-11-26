@@ -1,6 +1,7 @@
 import {
   ASTEROID_CONFIG,
   asteroidCenter,
+  boostOf,
   energyEfficiency,
   findById,
   findPlayer,
@@ -12,6 +13,7 @@ import {
   nextBuildingLevel,
   TICK_RATE,
   ticksUntilNextWave,
+  ULTRA_INSTINCT_CONFIG,
   validateCommand,
   type AsteroidSize,
   type BuildingLevel,
@@ -43,6 +45,21 @@ export interface HudView {
   readonly nextWave: readonly WaveGroup[];
   /** Pirate ships on the map. */
   readonly enemies: number;
+  readonly ultraInstinct: UltraInstinctView;
+}
+
+export interface UltraInstinctView {
+  /** On in this tick. */
+  readonly active: boolean;
+  /** Can be started now. */
+  readonly ready: boolean;
+  /** While on: seconds left; while recharging: seconds until it is ready; 0 when ready. */
+  readonly secondsLeft: number;
+  /**
+   * While on: the share of its time left (1 to 0); while recharging: how far it has recharged (0 to 1);
+   * 1 when ready.
+   */
+  readonly fraction: number;
 }
 
 /** Where a selected object is on the map, in cells: its center and its radius. */
@@ -94,11 +111,12 @@ export type SelectionView = BuildingView | AsteroidView;
 export function selectHud(state: ReadonlyGameState, playerId: PlayerId): HudView {
   const player = findPlayer(state.players, playerId);
   const efficiency = player ? energyEfficiency(player) : 0;
+  const boost = boostOf(state, playerId);
   const oreRate = state.buildings
     .filter(
       (building) => building.ownerId === playerId && building.type === 'mine' && building.targetId !== null,
     )
-    .reduce((sum, mine) => sum + getBuildingStats('mine', mine.level).orePerSecond * efficiency, 0);
+    .reduce((sum, mine) => sum + getBuildingStats('mine', mine.level).orePerSecond * efficiency * boost, 0);
   const { waves } = state.level;
   const waitTicks = (state.wave.index === 0 ? waves.firstWaveSeconds : waves.intervalSeconds) * TICK_RATE;
   const ticksLeft = ticksUntilNextWave(state);
@@ -116,7 +134,33 @@ export function selectHud(state: ReadonlyGameState, playerId: PlayerId): HudView
     waveProgress: Math.min(1, Math.max(0, 1 - ticksLeft / waitTicks)),
     nextWave: getWaveComposition(waves, state.wave.index),
     enemies: state.enemies.length,
+    ultraInstinct: selectUltraInstinct(state, playerId),
   };
+}
+
+function selectUltraInstinct(state: ReadonlyGameState, playerId: PlayerId): UltraInstinctView {
+  const player = findPlayer(state.players, playerId);
+  const until = player?.ultraInstinctUntilTick ?? 0;
+  const readyAt = player?.ultraInstinctReadyTick ?? 0;
+  if (state.tick < until) {
+    const left = until - state.tick;
+    return {
+      active: true,
+      ready: false,
+      secondsLeft: Math.ceil(left / TICK_RATE),
+      fraction: left / (ULTRA_INSTINCT_CONFIG.durationSeconds * TICK_RATE),
+    };
+  }
+  if (state.tick < readyAt) {
+    const left = readyAt - state.tick;
+    return {
+      active: false,
+      ready: false,
+      secondsLeft: Math.ceil(left / TICK_RATE),
+      fraction: 1 - left / (ULTRA_INSTINCT_CONFIG.rechargeSeconds * TICK_RATE),
+    };
+  }
+  return { active: false, ready: player !== undefined, secondsLeft: 0, fraction: 1 };
 }
 
 /** The selected building or asteroid; null when nothing is selected or it no longer exists. */

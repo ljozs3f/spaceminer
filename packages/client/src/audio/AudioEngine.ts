@@ -13,6 +13,8 @@ interface Output {
   readonly music: GainNode;
   /** Under the music volume: pulled down while an alarm sounds. */
   readonly duck: GainNode;
+  /** Under the duck: silences the soundtrack while other music plays (Ultra Instinct). */
+  readonly hold: GainNode;
   readonly effects: GainNode;
   readonly musicPlayer: MusicPlayer;
 }
@@ -35,8 +37,9 @@ export class AudioEngine {
       const master = ctx.createGain();
       const music = ctx.createGain();
       const duck = ctx.createGain();
+      const hold = ctx.createGain();
       const effects = ctx.createGain();
-      music.connect(duck).connect(master);
+      music.connect(duck).connect(hold).connect(master);
       effects.connect(master);
       connectEffectsReverb(ctx, effects, master);
       // a limiter: loud moments (music and several explosions at full volume) are held below clipping
@@ -47,7 +50,15 @@ export class AudioEngine {
       limiter.attack.value = 0.003;
       limiter.release.value = 0.25;
       master.connect(limiter).connect(ctx.destination);
-      this.output = { ctx, master, music, duck, effects, musicPlayer: new MusicPlayer(ctx, music) };
+      this.output = {
+        ctx,
+        master,
+        music,
+        duck,
+        hold,
+        effects,
+        musicPlayer: new MusicPlayer(ctx, music),
+      };
       this.applySettings(this.settings);
       this.output.musicPlayer.setScene(this.scene);
       this.output.musicPlayer.setIntensity(this.intensity);
@@ -77,6 +88,20 @@ export class AudioEngine {
     duck.gain.cancelScheduledValues(now);
     duck.gain.setTargetAtTime(level, now, 0.04);
     duck.gain.setTargetAtTime(1, now + seconds, 0.5);
+  }
+
+  /** Fades the soundtrack out while other music plays (true), and back in (false). */
+  holdMusic(held: boolean): void {
+    if (!this.output) return;
+    const { ctx, hold } = this.output;
+    const now = ctx.currentTime;
+    hold.gain.cancelScheduledValues(now);
+    hold.gain.setTargetAtTime(held ? 0 : 1, now, held ? 0.15 : 0.6);
+  }
+
+  /** The volume music should play at, 0 to 1: the music volume, 0 when muted. For music outside the engine. */
+  get musicLevel(): number {
+    return this.settings.muted ? 0 : this.settings.musicVolume;
   }
 
   /** 0: calm, 1: battle. */

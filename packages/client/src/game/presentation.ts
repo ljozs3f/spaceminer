@@ -90,6 +90,7 @@ export const TIPS: readonly string[] = [
   'Red markers on the map edge show where a wave comes in.',
   'Esc or P pauses the game. Take a breath, plan, then go on.',
   'The wave timer shows what the next wave brings: hover the ship icons for their hit points.',
+  'Ultra Instinct (I) makes everything ten times better for ten seconds: save it for the big waves.',
 ];
 
 export function cssColor(color: number): string {
@@ -108,6 +109,8 @@ export const REJECTION_MESSAGES: Readonly<Record<RejectionReason, string>> = {
   notOwner: 'That building is not yours.',
   maxLevel: 'Already at the highest level.',
   lastBuilding: 'Your last building cannot be sold.',
+  ultraInstinctActive: 'Ultra Instinct is already on.',
+  ultraInstinctRecharging: 'Ultra Instinct is still recharging.',
 };
 
 export interface StatLine {

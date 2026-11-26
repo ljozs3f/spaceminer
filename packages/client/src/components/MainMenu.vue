@@ -4,6 +4,7 @@ import {
   getBuildingStats,
   LEVELS,
   MINING_MODE_CONFIG,
+  ULTRA_INSTINCT_CONFIG,
   type LevelConfig,
 } from '@space-miner/sim';
 import { computed } from 'vue';
@@ -16,7 +17,7 @@ import SpriteIcon from './SpriteIcon.vue';
 import UiIcon from './UiIcon.vue';
 
 const props = defineProps<{ save: SaveData }>();
-const emit = defineEmits<{ play: [level: LevelConfig] }>();
+const emit = defineEmits<{ play: [level: LevelConfig]; credits: [] }>();
 
 const goalPercent = Math.round(MINING_MODE_CONFIG.winMinedOreFraction * 100);
 
@@ -112,6 +113,8 @@ const steps = [
             </button>
           </li>
         </ol>
+
+        <button type="button" class="menu-link" @click="emit('credits')">Credits</button>
       </section>
 
       <aside class="briefing">
@@ -144,6 +147,10 @@ const steps = [
             <kbd>1</kbd>–<kbd>{{ roster.length }}</kbd> pick a building, click to place
           </li>
           <li>Click a building to upgrade <kbd>U</kbd> or sell it</li>
+          <li>
+            <kbd>I</kbd> Ultra Instinct: everything ×{{ ULTRA_INSTINCT_CONFIG.multiplier }} for
+            {{ ULTRA_INSTINCT_CONFIG.durationSeconds }} s
+          </li>
           <li><kbd>Wheel</kbd> zoom · drag or <kbd>WASD</kbd> pan</li>
           <li>
             <kbd>Esc</kbd> / right click cancel · <kbd>Esc</kbd> / <kbd>P</kbd> pause · <kbd>M</kbd> mute
