@@ -76,8 +76,10 @@ function follow(target: Clip, on: boolean, running: boolean, fadeSeconds?: numbe
   }
 }
 
+// a source each, so that it runs only when one of them changes: a getter of a new array would run it on
+// every tick (the view is new every tick), and ask the player to play and set its volume every tick
 watch(
-  () => [props.view.active, props.view.burnout, props.running] as const,
+  [() => props.view.active, () => props.view.burnout, () => props.running],
   ([active, burntOut, running]) => {
     follow(ultra, active, running, burntOut ? BREAK_OFF_SECONDS : undefined);
     follow(burnout, burntOut, running, BURNOUT_FADE_SECONDS);

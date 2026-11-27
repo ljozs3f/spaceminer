@@ -84,6 +84,13 @@ const PLAYING = 1;
 const BUFFERING = 3;
 
 let api: Promise<YouTubeApi> | null = null;
+/**
+ * Players are created one at a time, each when the one before has loaded: created together, one of them now
+ * and then stops answering the API for good (it never plays).
+ */
+let creating: Promise<unknown> = Promise.resolve();
+/** A player that has not loaded in this long (ms) does not hold up the next one any more. */
+const CREATE_TIMEOUT_MS = 8000;
 
 /** Loads YouTube's IFrame Player API once; a failed load is tried again next time. */
 function loadApi(): Promise<YouTubeApi> {
@@ -115,8 +122,12 @@ function loadApi(): Promise<YouTubeApi> {
 export class YouTubeMusic {
   private player: YouTubePlayer | null = null;
   private wanted = false;
+  /** It has not played yet: it waits where it was created, at the start of the essence. */
+  private fresh = true;
   private volume = 1;
   private fadeTimer = 0;
+  /** Lets the next player be created: called when this one has loaded, failed or gone. */
+  private releaseNext: () => void = () => undefined;
   private disposed = false;
 
   /**
@@ -128,46 +139,18 @@ export class YouTubeMusic {
     private readonly track: YouTubeTrack,
     private readonly onPlaying: (playing: boolean) => void,
   ) {
-    loadApi()
-      .then((youtube) => {
-        if (this.disposed) return;
-        // the API replaces the element it gets with its iframe: an element of its own, not the host
-        const target = document.createElement('div');
-        host.append(target);
-        // the player answers through these events; until onReady it cannot be used
-        const player = new youtube.Player(target, {
-          videoId: track.videoId,
-          width: '100%',
-          height: '100%',
-          playerVars: {
-            start: track.startSeconds,
-            controls: 0,
-            disablekb: 1,
-            fs: 0,
-            iv_load_policy: 3,
-            playsinline: 1,
-            rel: 0,
-            origin: window.location.origin,
-          },
-          events: {
-            onReady: () => {
-              if (this.disposed) return;
-              this.player = player;
-              if (this.wanted) this.start();
-            },
-            onStateChange: ({ data }) => {
-              if (data !== BUFFERING) this.onPlaying(data === PLAYING);
-            },
-            onError: ({ data }) => {
-              console.warn(`"${track.title}" cannot play (YouTube error ${String(data)})`);
-              this.onPlaying(false);
-            },
-          },
-        });
-      })
-      .catch((error: unknown) => {
-        console.warn(`"${track.title}" is not available`, error);
-      });
+    const created = creating
+      .then(() => loadApi())
+      .then(
+        (youtube) =>
+          new Promise<void>((loaded) => {
+            window.setTimeout(loaded, CREATE_TIMEOUT_MS);
+            this.create(host, youtube, loaded);
+          }),
+      );
+    creating = created.catch((error: unknown) => {
+      console.warn(`"${track.title}" is not available`, error);
+    });
   }
 
   /** The player is loaded: play() starts it at once. */
@@ -222,9 +205,57 @@ export class YouTubeMusic {
 
   dispose(): void {
     this.disposed = true;
+    this.releaseNext();
     window.clearInterval(this.fadeTimer);
     this.player?.destroy();
     this.player = null;
+  }
+
+  /** Creates the player in `host`; `loaded` is called when it has loaded or failed. */
+  private create(host: HTMLElement, youtube: YouTubeApi, loaded: () => void): void {
+    const { track } = this;
+    this.releaseNext = loaded;
+    if (this.disposed) {
+      loaded();
+      return;
+    }
+    // the API replaces the element it gets with its iframe: an element of its own, not the host
+    const target = document.createElement('div');
+    host.append(target);
+    // the player answers through these events; until onReady it cannot be used
+    const player = new youtube.Player(target, {
+      videoId: track.videoId,
+      width: '100%',
+      height: '100%',
+      playerVars: {
+        start: track.startSeconds,
+        controls: 0,
+        disablekb: 1,
+        fs: 0,
+        iv_load_policy: 3,
+        playsinline: 1,
+        rel: 0,
+        origin: window.location.origin,
+      },
+      events: {
+        onReady: () => {
+          loaded();
+          if (this.disposed) return;
+          this.player = player;
+          if (this.wanted) this.start();
+        },
+        onStateChange: ({ data }) => {
+          if (data === BUFFERING) return;
+          if (data === PLAYING) this.fresh = false;
+          this.onPlaying(data === PLAYING);
+        },
+        onError: ({ data }) => {
+          loaded();
+          console.warn(`"${track.title}" cannot play (YouTube error ${String(data)})`);
+          this.onPlaying(false);
+        },
+      },
+    });
   }
 
   private start(): void {
@@ -232,7 +263,8 @@ export class YouTubeMusic {
     if (!player) return;
     window.clearInterval(this.fadeTimer);
     player.setVolume(this.youtubeVolume());
-    player.seekTo(this.track.startSeconds, true);
+    // a fresh player waits at the start of the essence already (its start parameter): it only needs to play
+    if (!this.fresh) player.seekTo(this.track.startSeconds, true);
     player.playVideo();
   }
 
