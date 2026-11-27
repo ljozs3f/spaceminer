@@ -4,7 +4,9 @@ import type { GameState, PlayerId } from '../types';
 
 /**
  * Recomputes every player's energy production and consumption from their buildings. Under Ultra Instinct
- * the solar panels make many times their energy.
+ * the solar panels make many times their energy. During its burnout they make a fraction of it, and the
+ * consumers, working at that fraction, use that fraction too: the covered share stays, so the burnout
+ * makes every building the same times worse, not the consumers twice.
  */
 export function updateEnergy(state: GameState): void {
   const players = new Map(state.players.map((player) => [player.id, player]));
@@ -16,8 +18,9 @@ export function updateEnergy(state: GameState): void {
     const player = players.get(building.ownerId);
     if (!player) continue;
     const energy = getBuildingEnergy(building.type, building.level);
-    player.energyProduced += energy.produced * boostOf(state, player.id);
-    player.energyConsumed += energy.consumed;
+    const boost = boostOf(state, player.id);
+    player.energyProduced += energy.produced * boost;
+    player.energyConsumed += energy.consumed * Math.min(1, boost);
   }
 }
 

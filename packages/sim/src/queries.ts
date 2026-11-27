@@ -85,16 +85,27 @@ export function isUltraInstinctActive(
   return state.tick < player.ultraInstinctUntilTick;
 }
 
+/** Whether the burnout after the player's Ultra Instinct is on in the current tick. */
+export function isUltraInstinctBurnout(
+  state: { readonly tick: number },
+  player: { readonly ultraInstinctUntilTick: number; readonly ultraInstinctBurnoutUntilTick: number },
+): boolean {
+  return !isUltraInstinctActive(state, player) && state.tick < player.ultraInstinctBurnoutUntilTick;
+}
+
 /**
  * How many times better the player's buildings work in the current tick: the Ultra Instinct multiplier
- * while it is on, otherwise 1.
+ * while it is on, a fraction during its burnout, otherwise 1.
  */
 export function boostOf(
   state: { readonly tick: number; readonly players: readonly ReadonlyDeep<PlayerState>[] },
   playerId: PlayerId,
 ): number {
   const player = findPlayer(state.players, playerId);
-  return player && isUltraInstinctActive(state, player) ? ULTRA_INSTINCT_CONFIG.multiplier : 1;
+  if (!player) return 1;
+  if (isUltraInstinctActive(state, player)) return ULTRA_INSTINCT_CONFIG.multiplier;
+  if (isUltraInstinctBurnout(state, player)) return 1 / ULTRA_INSTINCT_CONFIG.burnoutDivisor;
+  return 1;
 }
 
 export function ticksUntilNextWave(state: ReadonlyGameState): number {

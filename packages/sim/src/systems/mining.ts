@@ -7,7 +7,7 @@ import { getEfficiencies } from './energy';
 
 /**
  * Mines move ore from the nearest asteroids in range to their owner (many times as much under Ultra
- * Instinct). Depleted asteroids disappear.
+ * Instinct, a fraction of it during its burnout). Depleted asteroids disappear.
  */
 export function updateMining(state: GameState, events: GameEvent[]): void {
   const efficiencies = getEfficiencies(state);

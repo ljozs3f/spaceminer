@@ -51,13 +51,20 @@ export interface HudView {
 export interface UltraInstinctView {
   /** On in this tick. */
   readonly active: boolean;
+  /** Its burnout, right after it, is on in this tick: every building works many times worse. */
+  readonly burnout: boolean;
   /** Can be started now. */
   readonly ready: boolean;
-  /** While on: seconds left; while recharging: seconds until it is ready; 0 when ready. */
-  readonly secondsLeft: number;
   /**
-   * While on: the share of its time left (1 to 0); while recharging: how far it has recharged (0 to 1);
-   * 1 when ready.
+   * While on: seconds left; in the burnout: seconds of it left; while recharging: seconds until it is ready;
+   * 0 when ready.
+   */
+  readonly secondsLeft: number;
+  /** Seconds until it can be started again; 0 when ready. */
+  readonly readyInSeconds: number;
+  /**
+   * While on or in the burnout: the share of its time left (1 to 0); while recharging: how far it has
+   * recharged (0 to 1); 1 when ready.
    */
   readonly fraction: number;
 }
@@ -141,26 +148,51 @@ export function selectHud(state: ReadonlyGameState, playerId: PlayerId): HudView
 function selectUltraInstinct(state: ReadonlyGameState, playerId: PlayerId): UltraInstinctView {
   const player = findPlayer(state.players, playerId);
   const until = player?.ultraInstinctUntilTick ?? 0;
+  const burnoutUntil = player?.ultraInstinctBurnoutUntilTick ?? 0;
   const readyAt = player?.ultraInstinctReadyTick ?? 0;
+  const seconds = (ticks: number): number => Math.ceil(ticks / TICK_RATE);
+  const readyInSeconds = seconds(Math.max(0, readyAt - state.tick));
   if (state.tick < until) {
     const left = until - state.tick;
     return {
       active: true,
+      burnout: false,
       ready: false,
-      secondsLeft: Math.ceil(left / TICK_RATE),
+      secondsLeft: seconds(left),
+      readyInSeconds,
       fraction: left / (ULTRA_INSTINCT_CONFIG.durationSeconds * TICK_RATE),
+    };
+  }
+  if (state.tick < burnoutUntil) {
+    const left = burnoutUntil - state.tick;
+    return {
+      active: false,
+      burnout: true,
+      ready: false,
+      secondsLeft: seconds(left),
+      readyInSeconds,
+      fraction: left / (ULTRA_INSTINCT_CONFIG.burnoutSeconds * TICK_RATE),
     };
   }
   if (state.tick < readyAt) {
     const left = readyAt - state.tick;
     return {
       active: false,
+      burnout: false,
       ready: false,
-      secondsLeft: Math.ceil(left / TICK_RATE),
+      secondsLeft: seconds(left),
+      readyInSeconds,
       fraction: 1 - left / (ULTRA_INSTINCT_CONFIG.rechargeSeconds * TICK_RATE),
     };
   }
-  return { active: false, ready: player !== undefined, secondsLeft: 0, fraction: 1 };
+  return {
+    active: false,
+    burnout: false,
+    ready: player !== undefined,
+    secondsLeft: 0,
+    readyInSeconds,
+    fraction: 1,
+  };
 }
 
 /** The selected building or asteroid; null when nothing is selected or it no longer exists. */

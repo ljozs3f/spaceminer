@@ -30,6 +30,8 @@ export interface PlayerState {
   energyConsumed: number;
   /** Ultra Instinct (ULTRA_INSTINCT_CONFIG) is on in the ticks before this one. */
   ultraInstinctUntilTick: number;
+  /** Its burnout is on from ultraInstinctUntilTick in the ticks before this one. */
+  ultraInstinctBurnoutUntilTick: number;
   /** Ultra Instinct can be started again from this tick on. */
   ultraInstinctReadyTick: number;
 }

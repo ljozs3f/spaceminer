@@ -9,12 +9,13 @@ import type { UltraInstinctView } from '../game/views';
  * The Ultra Instinct button: a glowing orb in the bottom right corner of the map, like the ultimate of an
  * action game. A ring around it fills up while it recharges (with the time left in the orb) and drains while
  * it is on; when it is ready the orb swirls, pulses and gives off sparks, and it flares up the moment it
- * becomes ready.
+ * becomes ready. In the burnout right after it, the orb is a smouldering ember with a red ring draining.
  */
 const props = defineProps<{ view: UltraInstinctView }>();
 const emit = defineEmits<{ activate: [] }>();
 
-const { multiplier, durationSeconds, rechargeSeconds } = ULTRA_INSTINCT_CONFIG;
+const { multiplier, durationSeconds, burnoutDivisor, burnoutSeconds, rechargeSeconds } =
+  ULTRA_INSTINCT_CONFIG;
 
 /** The ring's radius in the SVG's 100 × 100 box. */
 const RING_RADIUS = 46;
@@ -25,12 +26,14 @@ const clock = (seconds: number): string =>
 
 const state = computed(() => {
   if (props.view.active) return 'active';
+  if (props.view.burnout) return 'burnout';
   return props.view.ready ? 'ready' : 'charging';
 });
 
 const title =
   `Ultra Instinct (I): every building works ${String(multiplier)} times better for ` +
-  `${String(durationSeconds)} seconds, then it recharges for ${clock(rechargeSeconds)}`;
+  `${String(durationSeconds)} seconds, then ${String(burnoutDivisor)} times worse for ` +
+  `${String(burnoutSeconds)} seconds, and it recharges for ${clock(rechargeSeconds)}`;
 
 function onClick(): void {
   if (props.view.ready) emit('activate');
@@ -60,6 +63,10 @@ function onClick(): void {
           <b>{{ view.secondsLeft }}</b>
           <small>×{{ multiplier }}</small>
         </template>
+        <template v-else-if="state === 'burnout'">
+          <b>{{ view.secondsLeft }}</b>
+          <small>÷{{ burnoutDivisor }}</small>
+        </template>
         <template v-else-if="state === 'charging'">
           <b class="clock">{{ clock(view.secondsLeft) }}</b>
           <small>charging</small>
@@ -76,6 +83,6 @@ function onClick(): void {
     <!-- mounted the moment it becomes ready, so its flare plays once -->
     <span v-if="state === 'ready'" class="ultra-burst" aria-hidden="true" />
     <kbd class="hotkey">I</kbd>
-    <span class="ultra-label">Ultra Instinct</span>
+    <span class="ultra-label">{{ state === 'burnout' ? 'Burnout' : 'Ultra Instinct' }}</span>
   </button>
 </template>

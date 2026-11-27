@@ -6,6 +6,7 @@ import {
   findById,
   getBuildingStats,
   isUltraInstinctActive,
+  isUltraInstinctBurnout,
   TICK_RATE,
   ULTRA_INSTINCT_CONFIG,
   validateCommand,
@@ -57,6 +58,11 @@ const COLORS = {
   /** Ultra Instinct: the silver-blue aura around the buildings, and its white-hot core. */
   aura: 0x9fd4ff,
   auraCore: 0xeef8ff,
+  /** The burnout after it: the charred buildings, the smoke off them, their embers. */
+  burnt: 0x8a5a54,
+  burntDark: 0x4e3436,
+  smoke: 0x2e2c33,
+  ember: 0xff6a2a,
 } as const;
 
 /** Drawing order, back to front. */
@@ -72,7 +78,7 @@ const DEPTH = {
   ultraHeat: 2.9,
   buildings: 3,
   buildingParts: 3.05,
-  /** Ultra Instinct: the buildings glow white-hot, and boil. */
+  /** Ultra Instinct: the buildings glow white-hot, and boil; in its burnout they smoke. */
   ultraShine: 3.1,
   ultraBoil: 3.2,
   effects: 4,
@@ -130,6 +136,15 @@ const ULTRA_HEAT = {
   ripples: 2,
   rippleSeconds: 0.9,
 } as const;
+/**
+ * The burnout after Ultra Instinct: the buildings come back to life over its last seconds (s). Per building:
+ * puffs of smoke rising off it, embers dying on it.
+ */
+const BURNOUT = {
+  recoverSeconds: 0.6,
+  puffs: 5,
+  embers: 4,
+} as const;
 /** Keys that pan the map. */
 const PAN_KEYS: Readonly<Record<string, string>> = {
   arrowleft: 'left',
@@ -166,6 +181,10 @@ export class GameScene extends Phaser.Scene {
   private partShineLayers: SpriteLayer[] = [];
   /** Ultra Instinct: the bubbles and the heat of the boiling buildings, added (it glows). */
   private ultraFx!: Phaser.GameObjects.Graphics;
+  /** Its burnout: the smoke off the buildings (not added: it darkens). */
+  private burnoutFx!: Phaser.GameObjects.Graphics;
+  /** Whether the player's buildings were burnt out in the last frame, to jolt the view as they burn out. */
+  private burntOut = false;
   /** When the player's Ultra Instinct last started (scene ms), for the ring of light it bursts out with. */
   private ultraStartMs = Number.NEGATIVE_INFINITY;
   private readonly mineRigs = new Map<BuildingLevel, MineRig>();
@@ -226,6 +245,7 @@ export class GameScene extends Phaser.Scene {
     );
     this.overlay = this.add.graphics().setDepth(DEPTH.overlay);
     this.ultraFx = this.add.graphics().setDepth(DEPTH.ultraBoil).setBlendMode(Phaser.BlendModes.ADD);
+    this.burnoutFx = this.add.graphics().setDepth(DEPTH.ultraBoil);
     this.effects = new Effects(this, DEPTH.effects, CELL_SIZE);
     // the starting buildings are already standing
     for (const building of this.session.state.buildings) {
@@ -360,6 +380,8 @@ export class GameScene extends Phaser.Scene {
     this.updateHover(pointer);
     this.overlay.clear();
     this.ultraFx.clear();
+    this.burnoutFx.clear();
+    this.checkBurnout();
     this.backdrop.update(this.time.now);
     this.drawAsteroids();
     this.drawBuildings(alpha);
@@ -579,6 +601,7 @@ export class GameScene extends Phaser.Scene {
     const now = this.time.now;
     const { state } = this.session;
     const heats = new Map(state.players.map((player) => [player.id, this.ultraHeat(player)]));
+    const burns = new Map(state.players.map((player) => [player.id, this.burnout(player)]));
     const repairing = new Set(
       this.session.state.drones.flatMap((drone) =>
         drone.repairing && drone.targetId !== null ? [drone.targetId] : [],
@@ -590,16 +613,20 @@ export class GameScene extends Phaser.Scene {
       const sprite = buildingSprite(building.type, building.level);
       const rig = building.type === 'mine' ? this.mineRigs.get(building.level) : undefined;
       const heat = heats.get(building.ownerId) ?? 0;
+      const burn = burns.get(building.ownerId) ?? 0;
       if (sprite) {
         // in Ultra Instinct it boils: swells and trembles, and glows white-hot
         const boil = heat > 0 ? boilMotion(building.id, now, heat) : { dx: 0, dy: 0, scale: 1 };
         const bx = x + boil.dx;
         const by = y + boil.dy;
-        const size = SPRITE_SIZE.building[building.level] * CELL_SIZE * grow * boil.scale;
+        // in its burnout it is charred and sags a little
+        const sag = 1 - 0.05 * burn;
+        const size = SPRITE_SIZE.building[building.level] * CELL_SIZE * grow * boil.scale * sag;
         const rotation =
           building.type === 'laser' ? this.aim(building.id, building.targetId, x, y, alpha) : 0;
         const texture = rig?.body ?? sprite;
-        this.layers.buildings.draw(building.id, texture, bx, by, size, rotation);
+        const tint = burn > 0 ? charred(building.id, now, burn) : 0xffffff;
+        this.layers.buildings.draw(building.id, texture, bx, by, size, rotation).setTint(tint);
         const shine = heat > 0 ? whiteHot(building.id, now, heat) : null;
         if (shine) {
           this.layers.ultraShine
@@ -607,9 +634,13 @@ export class GameScene extends Phaser.Scene {
             .setTint(shine.tint)
             .setAlpha(shine.alpha);
         }
-        if (rig) this.drawMineParts(building.id, building.targetId !== null, rig, bx, by, size, shine);
+        if (rig) {
+          const working = building.targetId !== null;
+          this.drawMineParts(building.id, working, rig, { x: bx, y: by, size, tint, burn }, shine);
+        }
       } else drawBuildingShape(g, building.type, x, y, 1);
       if (heat > 0) this.drawUltraHeat(building.id, x, y, heat, now);
+      if (burn > 0) this.drawBurnout(building.id, x, y, burn, now);
 
       // level pips
       g.fillStyle(0x000000, 0.55).fillRoundedRect(x - 10, y + CELL_SIZE * 0.36 - 3.5, 20, 7, 3);
@@ -661,6 +692,76 @@ export class GameScene extends Phaser.Scene {
     if (left > ULTRA_HEAT.fadeSeconds) return rise;
     const stutter = Math.sin((this.time.now / 1000) * 31) > -0.3 ? 1 : 0.4;
     return rise * (0.25 + 0.75 * (left / ULTRA_HEAT.fadeSeconds)) * stutter;
+  }
+
+  /**
+   * How burnt out a player's buildings are in the burnout after Ultra Instinct, 0 (not) to 1: fully from its
+   * start, and over its last moments they come back to life.
+   */
+  private burnout(player: {
+    readonly ultraInstinctUntilTick: number;
+    readonly ultraInstinctBurnoutUntilTick: number;
+  }): number {
+    const { state } = this.session;
+    if (!isUltraInstinctBurnout(state, player)) return 0;
+    const left = (player.ultraInstinctBurnoutUntilTick - state.tick) / TICK_RATE;
+    return Math.min(1, left / BURNOUT.recoverSeconds);
+  }
+
+  /** The moment the player's buildings burn out: a dark red flash and a thud. */
+  private checkBurnout(): void {
+    const { state, playerId } = this.session;
+    const player = state.players.find((candidate) => candidate.id === playerId);
+    const burntOut = player !== undefined && isUltraInstinctBurnout(state, player);
+    if (burntOut && !this.burntOut) {
+      this.cameras.main.flash(380, 110, 18, 12);
+      this.cameras.main.shake(320, 0.007);
+    }
+    this.burntOut = burntOut;
+  }
+
+  /**
+   * The burnout around a building: a dull red glow dying in it, puffs of smoke rising off it, and embers
+   * that flare and go out on it.
+   */
+  private drawBurnout(id: EntityId, x: number, y: number, burn: number, now: number): void {
+    const seconds = now / 1000;
+    const phase = hash(id) * Math.PI * 2;
+    // a dying fire: it glows up now and then, unevenly
+    const smoulder = 0.55 + 0.45 * Math.sin(seconds * 5.3 + phase) * Math.sin(seconds * 2.1 + phase * 2);
+    this.layers.ultraHeat
+      .draw(id, GLOW_TEXTURE, x, y, CELL_SIZE * 1.7, null)
+      .setTint(COLORS.ember)
+      .setAlpha(burn * 0.32 * smoulder);
+
+    const g = this.burnoutFx;
+    for (let i = 0; i < BURNOUT.puffs; i++) {
+      const seed = id * 17 + i * 5;
+      const rise = (seconds / (1.1 + hash(seed) * 0.6) + i / BURNOUT.puffs + hash(seed + 1)) % 1;
+      const drift = Math.sin(rise * 4 + phase + i) * 5;
+      const px = x + (hash(seed + 2) - 0.5) * CELL_SIZE * 0.5 + drift + rise * 6;
+      const py = y - CELL_SIZE * 0.1 - rise * CELL_SIZE * 1.4;
+      const size = 3 + 9 * rise;
+      const fade = rise < 0.15 ? rise / 0.15 : 1 - (rise - 0.15) / 0.85;
+      g.fillStyle(COLORS.smoke, burn * 0.55 * fade).fillCircle(px, py, size);
+      g.fillStyle(COLORS.smoke, burn * 0.25 * fade).fillCircle(px - size * 0.4, py + size * 0.3, size * 0.7);
+    }
+
+    const glow = this.ultraFx;
+    for (let i = 0; i < BURNOUT.embers; i++) {
+      const seed = id * 23 + i * 11;
+      const cycle = seconds / (0.6 + hash(seed) * 0.7) + hash(seed + 3);
+      const life = cycle % 1;
+      const round = Math.floor(cycle);
+      const angle = hash(seed + round * 7) * Math.PI * 2;
+      const distance = CELL_SIZE * 0.34 * Math.sqrt(hash(seed + round * 19 + 1));
+      const ex = x + Math.cos(angle) * distance;
+      const ey = y + Math.sin(angle) * distance + life * 3;
+      // it flares up, then cools and goes out
+      const heat = life < 0.2 ? life / 0.2 : 1 - (life - 0.2) / 0.8;
+      glow.fillStyle(COLORS.ember, burn * 0.35 * heat).fillCircle(ex, ey, 3.2);
+      glow.fillStyle(0xffd2a0, burn * 0.8 * heat).fillCircle(ex, ey, 1.2);
+    }
   }
 
   /**
@@ -750,15 +851,22 @@ export class GameScene extends Phaser.Scene {
     id: EntityId,
     working: boolean,
     rig: MineRig,
-    x: number,
-    y: number,
-    size: number,
+    /** Where the body is drawn, its tint, and how burnt out it is (the burnout after Ultra Instinct). */
+    body: {
+      readonly x: number;
+      readonly y: number;
+      readonly size: number;
+      readonly tint: number;
+      readonly burn: number;
+    },
     /** Ultra Instinct: how the parts glow. */
     shine: { readonly tint: number; readonly alpha: number } | null,
   ): void {
+    const { x, y, size } = body;
     const current = this.mineWork.get(id) ?? 0;
     const step = Math.min(1, (this.frameMs / 1000) * MINE_WORK_EASE);
-    const work = current + ((working ? 1 : 0) - current) * step;
+    // a burnt-out mine's arms only stir
+    const work = current + ((working ? 1 - 0.75 * body.burn : 0) - current) * step;
     this.mineWork.set(id, work < 0.001 ? 0 : work);
     const seconds = this.time.now / 1000;
     const phase = hash(id) * Math.PI * 2;
@@ -769,7 +877,8 @@ export class GameScene extends Phaser.Scene {
       const rotation = part.motion === 'swing' ? motion : 0;
       this.partLayers[index]
         ?.draw(id, part.texture, px, py, size, rotation)
-        .setOrigin(part.originX, part.originY);
+        .setOrigin(part.originX, part.originY)
+        .setTint(body.tint);
       if (shine) {
         this.partShineLayers[index]
           ?.draw(id, part.texture, px, py, size, rotation)
@@ -1052,7 +1161,6 @@ function drawAsteroidShape(
   }
 }
 
-/** 0 to 1 with a small overshoot at the end, for things that pop into place. */
 /** Ultra Instinct: a building boils, it swells and trembles a little, faster than the eye can follow. */
 function boilMotion(
   id: EntityId,
@@ -1080,6 +1188,17 @@ function whiteHot(
   return { tint: mixColors(COLORS.aura, COLORS.auraCore, flicker), alpha: heat * (0.4 + 0.35 * flicker) };
 }
 
+/**
+ * The burnout after Ultra Instinct: the tint of a charred building. Its power sputters: now and then it
+ * drops darker for a moment, each building on its own.
+ */
+function charred(id: EntityId, now: number, burn: number): number {
+  const flick = Math.floor(now / 70 + hash(id) * 50);
+  const dark = hash(id * 3 + flick) < 0.22 ? 0.75 : 0;
+  return mixColors(0xffffff, mixColors(COLORS.burnt, COLORS.burntDark, dark), burn);
+}
+
+/** 0 to 1 with a small overshoot at the end, for things that pop into place. */
 function easeOutBack(t: number): number {
   const c = 1.7;
   return t >= 1 ? 1 : 0.4 + 0.6 * (1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2);

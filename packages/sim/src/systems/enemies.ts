@@ -7,7 +7,8 @@ import { cellCenter, DISTANCE_EPSILON, distance, intervalTicks, perTick } from '
 
 /**
  * Pirates fly to the nearest building, around the asteroids in their way, and fire at it once in range.
- * Buildings under Ultra Instinct take only a fraction of the damage. Destroyed buildings disappear.
+ * Buildings under Ultra Instinct take only a fraction of the damage, and many times the damage during its
+ * burnout. Destroyed buildings disappear.
  */
 export function updateEnemies(state: GameState, events: GameEvent[]): void {
   for (const enemy of state.enemies) {

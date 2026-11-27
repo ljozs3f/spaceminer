@@ -3,7 +3,7 @@ import { getBuildingStats } from '../src/buildings';
 import { ENEMY_CONFIG } from '../src/config/enemies';
 import { TICK_RATE } from '../src/config/simulation';
 import { ULTRA_INSTINCT_CONFIG } from '../src/config/ultraInstinct';
-import { isUltraInstinctActive } from '../src/queries';
+import { energyEfficiency, isUltraInstinctActive, isUltraInstinctBurnout } from '../src/queries';
 import { step } from '../src/simulation';
 import type { GameState } from '../src/types';
 import {
@@ -17,12 +17,20 @@ import {
   stepWith,
 } from './helpers';
 
-const { multiplier, durationSeconds, rechargeSeconds } = ULTRA_INSTINCT_CONFIG;
+const { multiplier, durationSeconds, burnoutDivisor, burnoutSeconds, rechargeSeconds } =
+  ULTRA_INSTINCT_CONFIG;
 const DURATION_TICKS = durationSeconds * TICK_RATE;
+const BURNOUT_TICKS = burnoutSeconds * TICK_RATE;
 const RECHARGE_TICKS = rechargeSeconds * TICK_RATE;
 
 function activate(state: GameState): ReturnType<typeof stepWith> {
   return stepWith(state, { type: 'ultraInstinct', playerId: PLAYER });
+}
+
+/** Starts Ultra Instinct and runs to the first tick of its burnout. */
+function toBurnout(state: GameState): void {
+  activate(state);
+  runTicks(state, DURATION_TICKS - 1);
 }
 
 /** Shots fired in the next ticks. */
@@ -59,6 +67,75 @@ describe('ultra instinct', () => {
     expect(activate(state).ok).toBe(true);
   });
 
+  it('burns out right after it ends, for a few seconds of the recharge', () => {
+    const state = createTestGame();
+    const player = getPlayer(state);
+    expect(isUltraInstinctBurnout(state, player)).toBe(false);
+
+    activate(state);
+    runTicks(state, DURATION_TICKS - 2);
+    expect(isUltraInstinctBurnout(state, player)).toBe(false);
+    step(state);
+    expect(isUltraInstinctActive(state, player)).toBe(false);
+    expect(isUltraInstinctBurnout(state, player)).toBe(true);
+    runTicks(state, BURNOUT_TICKS - 1);
+    expect(isUltraInstinctBurnout(state, player)).toBe(true);
+    expect(activate(state)).toMatchObject({ ok: false, reason: 'ultraInstinctRecharging' });
+    expect(isUltraInstinctBurnout(state, player)).toBe(false);
+  });
+
+  it('makes the mines mine only a fraction during the burnout, at the same share of power', () => {
+    const normal = createTestGame({}, [{ x: 10, y: 5, ore: 10_000 }]);
+    const burnt = createTestGame({}, [{ x: 10, y: 5, ore: 10_000 }]);
+    for (const state of [normal, burnt]) place(state, 'mine', 8, 5);
+    toBurnout(burnt);
+    runTicks(normal, DURATION_TICKS);
+    const before = { normal: getPlayer(normal).ore, burnt: getPlayer(burnt).ore };
+
+    runTicks(normal, TICK_RATE);
+    runTicks(burnt, TICK_RATE);
+
+    const mined = getBuildingStats('mine', 1).orePerSecond;
+    expect(getPlayer(normal).ore - before.normal).toBeCloseTo(mined);
+    expect(getPlayer(burnt).ore - before.burnt).toBeCloseTo(mined / burnoutDivisor);
+    // the panels make a fraction, and the mine, working at that fraction, uses a fraction too
+    expect(getPlayer(burnt).energyProduced).toBeCloseTo(getPlayer(normal).energyProduced / burnoutDivisor);
+    expect(getPlayer(burnt).energyConsumed).toBeCloseTo(getPlayer(normal).energyConsumed / burnoutDivisor);
+    expect(energyEfficiency(getPlayer(burnt))).toBeCloseTo(energyEfficiency(getPlayer(normal)));
+  });
+
+  it('lets the buildings take many times the damage during the burnout', () => {
+    const state = createTestGame();
+    place(state, 'mine', 5, 5);
+    toBurnout(state);
+    const mine = buildingAt(state, 5, 5);
+    const before = mine.hp;
+    addEnemy(state, 5.5, 6.5, Number.MAX_SAFE_INTEGER, 'gunship');
+    step(state);
+
+    expect(before - mine.hp).toBeCloseTo(ENEMY_CONFIG.gunship.damage * burnoutDivisor);
+  });
+
+  it('makes the turrets fire only a fraction as fast during the burnout', () => {
+    const normal = createTestGame();
+    const burnt = createTestGame();
+    for (const state of [normal, burnt]) place(state, 'laser', 5, 5);
+    toBurnout(burnt);
+    runTicks(normal, DURATION_TICKS);
+    for (const state of [normal, burnt]) {
+      const target = addEnemy(state, 5.5, 7.5, Number.MAX_SAFE_INTEGER);
+      target.cooldown = Number.MAX_SAFE_INTEGER;
+      // past the first shot, which every turret fires at once
+      step(state);
+    }
+
+    // the burnout ends after this, so count over what is left of it
+    const ticks = BURNOUT_TICKS - 1;
+    const shots = shotsIn(normal, ticks);
+    expect(shots).toBeGreaterThan(burnoutDivisor);
+    expect(shotsIn(burnt, ticks)).toBe(Math.floor(shots / burnoutDivisor));
+  });
+
   it('makes the mines mine many times as fast', () => {
     const normal = createTestGame({}, [{ x: 10, y: 5, ore: 10_000 }]);
     const boosted = createTestGame({}, [{ x: 10, y: 5, ore: 10_000 }]);
@@ -75,7 +152,7 @@ describe('ultra instinct', () => {
     expect(getPlayer(boosted).ore - before.boosted).toBeCloseTo(mined * multiplier);
   });
 
-  it('makes the solar panels produce many times their energy, until it ends', () => {
+  it('makes the solar panels produce many times their energy, then a fraction of it in the burnout', () => {
     const state = createTestGame();
     const { energyOutput } = getBuildingStats('solar', 1);
 
@@ -83,6 +160,9 @@ describe('ultra instinct', () => {
     expect(getPlayer(state).energyProduced).toBe(energyOutput * multiplier);
 
     runTicks(state, DURATION_TICKS);
+    expect(getPlayer(state).energyProduced).toBeCloseTo(energyOutput / burnoutDivisor);
+
+    runTicks(state, BURNOUT_TICKS);
     expect(getPlayer(state).energyProduced).toBe(energyOutput);
   });
 

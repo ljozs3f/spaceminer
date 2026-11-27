@@ -149,7 +149,7 @@ export const TIPS: readonly string[] = [
   'Red markers on the map edge show where a wave comes in.',
   'Esc or P pauses the game. Take a breath, plan, then go on.',
   'The wave timer shows what the next wave brings: hover the ship icons for their hit points.',
-  'Ultra Instinct (I, the orb in the corner) makes everything ten times better for ten seconds, then recharges for two minutes: save it for the big waves.',
+  'Ultra Instinct (I, the orb in the corner) makes everything ten times better for ten seconds, but then your buildings burn out: five seconds five times worse. Do not end it with pirates at the door.',
 ];
 
 export function cssColor(color: number): string {

@@ -21,6 +21,11 @@ const emit = defineEmits<{ play: [level: LevelConfig]; credits: [] }>();
 
 const goalPercent = Math.round(MINING_MODE_CONFIG.winMinedOreFraction * 100);
 
+const ultra = ULTRA_INSTINCT_CONFIG;
+const ultraLine =
+  `everything ×${String(ultra.multiplier)} for ${String(ultra.durationSeconds)} s, ` +
+  `then ÷${String(ultra.burnoutDivisor)} for ${String(ultra.burnoutSeconds)} s`;
+
 const sectors = computed(() =>
   LEVELS.map((level, index) => ({
     level,
@@ -147,10 +152,7 @@ const steps = [
             <kbd>1</kbd>–<kbd>{{ roster.length }}</kbd> pick a building, click to place
           </li>
           <li>Click a building to upgrade <kbd>U</kbd> or sell it</li>
-          <li>
-            <kbd>I</kbd> Ultra Instinct: everything ×{{ ULTRA_INSTINCT_CONFIG.multiplier }} for
-            {{ ULTRA_INSTINCT_CONFIG.durationSeconds }} s
-          </li>
+          <li><kbd>I</kbd> Ultra Instinct: {{ ultraLine }}</li>
           <li><kbd>Wheel</kbd> zoom · drag or <kbd>WASD</kbd> pan</li>
           <li>
             <kbd>Esc</kbd> / right click cancel · <kbd>Esc</kbd> / <kbd>P</kbd> pause · <kbd>M</kbd> mute
